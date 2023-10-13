@@ -1,21 +1,22 @@
-const express = require('express')
-const db = require('./config/mongoose')
-const bodyParser = require('body-parser');
+const express = require("express");
+const bodyParser = require("body-parser");
+const connectDb = require("./config/mongoose");
+const mongoose = require("mongoose");
+const app = express();
+require("dotenv").config();
 
-const app = express()
-const port = 7000;
-
-app.use(express.urlencoded())
+const cors = require('cors');
+app.use(cors());
+app.use(express.urlencoded());
 
 // using routes
-app.use('/',require('./routes'))
+app.use("/", require("./routes/router"));
 
+connectDb();
 
-
-app.listen(port,(err)=>{
-    if(err){
-        console.log(`error in running the server : ${err}`);
-    }
-
-    console.log(`Server is running on ${port}`)
-})
+mongoose.connection.once("open", async () => {
+  console.log("Connected To MONGODB");
+  app.listen(process.env.PORT, () => {
+    console.log("Listening on Port ", process.env.PORT);
+  });
+});
