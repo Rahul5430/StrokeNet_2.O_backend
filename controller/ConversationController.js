@@ -1,0 +1,1 @@
+// You have to implement the same functions which are in Chat Vista.
