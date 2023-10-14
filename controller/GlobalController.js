@@ -27,7 +27,7 @@ const globalSettings = (req, res) => {
           { name: "Senior Resident", value: "senior_resident" },
           { name: "Emergency Resident", value: "emergency_resident" },
           { name: "Stroke Nurse", value: "stroke_nurse" },
-        ],
+        ]
       },
       {
         name: "Emergency",
@@ -36,10 +36,46 @@ const globalSettings = (req, res) => {
           { name: "Physician", value: "physician" },
           { name: "Senior Resident", value: "senior_resident" },
           { name: "Emergency Resident", value: "emergency_resident" },
-        ],
+        ]
       },
-      // Add other departments and roles as needed
-    ],
+      {
+        name: "Radio Diagnosis",
+        value: "radio_diagnosis",
+        roles: [
+          { name: "Physician", value: "physician" },
+          { name: "Senior Resident", value: "senior_resident" },
+          { name: "Emergency Resident", value: "emergency_resident" },
+        ]
+      },
+      {
+        name: "Internal Medicine",
+        value: "internal_medicine",
+        roles: [
+          { name: "Physician", value: "physician" },
+          { name: "Senior Resident", value: "senior_resident" },
+          { name: "Emergency Resident", value: "emergency_resident" },
+        ]
+      },
+      {
+        name: "COVID",
+        value: "covid",
+        roles: [
+          { name: "Consultant", value: "consultant" },
+          { name: "Senior Resident", value: "senior_resident" },
+          { name: "Junior Resident", value: "junior_resident" },
+        ]
+      },
+      {
+        name: "PRM",
+        value: "prm",
+        roles: [
+          { name: "Physiatrist", value: "physiatrist" },
+          { name: "Physiotherapist", value: "physiotherapist" },
+          { name: "Occupational Therapist", value: "occupational_therapist" },
+          { name: "Student / Resident", value: "student/resident" },
+        ]
+      }
+    ]
   };
 
   const output = {

@@ -1,71 +1,71 @@
 const express = require('express');
 const User = require('../models/UserCollection');
 
-const signUp = async (req,res)=>{
+const signup = async (req,res)=>{
     const data = req.body;
-
-    if(data.first_name == ""){
-        return res.status(403).json({message: 'Please Enter Valid First Name'});
+    if(data.first_name == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid First Name'}});
     }
-    if(data.last_name == ""){
-        return res.status(403).json({message: 'Please Enter Valid Last Name'});
+    if(data.last_name == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid Last Name'}});
     }
-    if(data.email_address == ""){
-        return res.status(403).json({message: 'Please Enter Valid Email Addresss'});
+    if(data.email_address == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid Email Addresss'}});
     }
     // check for other email validations 
 
 
     //  Check here for the same email address using Data Base
-    const user = User.find({"email_address": data.email_address})
-    // if(user){
+    const user =await User.findOne({email_address: data.email_address})
+    if(user){
+        return res.status(403).json({data:{message: ' Email Address already registered'}});
+    }
 
-    // }
-
-    if(data.phone_number == ""){
-        return res.status(403).json({message: 'Please Enter Valid Phone Number'});
+    if(data.phone_number == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid Phone Number'}});
     }
     // check for other Phone Number validations 
 
 
-    if(data.password == ""){
-        return res.status(403).json({message: 'Please Enter Valid Password'});
+    if(data.password == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid Password'}});
     }
     // check for other Password Validations
 
 
-    if(data.center_id == ""){
-        return res.status(403).json({message: 'Please Enter Valid Center Id'});
+    if(data.center_id == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid Center Id'}});
     }
-    if(data.user_department == ""){
-        return res.status(403).json({message: 'Please Enter Valid User Department'});
+    if(data.user_department == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid User Department'}});
     }
-    if(data.user_role == ""){
-        return res.status(403).json({message: 'Please Enter Valid User Role'});
+    if(data.user_role == null){
+        return res.status(403).json({data:{message: 'Please Enter Valid User Role'}});
     }
 
     // Now insert the user info in the insertUser Variable
     const insertUser = {
-        first_name : req.first_name,
-        last_name: req.last_name,
-        full_name: first_name+last_name,
-        email_address: req.email_address,
-        phone_number: req.phone_number,
+        first_name : data.first_name,
+        last_name: data.last_name,
+        full_name: data.first_name+" "+data.last_name,
+        email_address: data.email_address,
+        phone_number: data.phone_number,
         phone_number_verified: false,
-        password: req.password,
+        password: data.password,
         center_id: {
-            id: req.center_id,
-            
+            id: data.center_id,
         },
-        user_department: req.user_department,
-        user_role: req.user_role,
-        last_login: req.last_login,
-        online_status: req.online_status,
-        status: req.status
+        user_department: data.user_department,
+        user_role: data.user_role,
+        last_login: data.last_login,
+        online_status: data.online_status,
+        status: data.status
     }
 
     // Now add this insertUser into the dataBase
-    const saved_user = await User.insertOne(insertUser);
+
+
+    const saved_user = await User.insertMany([insertUser]);
 
 
 
@@ -79,19 +79,19 @@ const signUp = async (req,res)=>{
 
 
     //  At last send appropriate information
-    return res.status(200).json({message: "User has been Created Successfully"})
+    return res.status(200).send({data:{message: "User has been Created Successfully",userId:saved_user._id}});
 }
 
 const login = (req,res)=>{
     const data = req.body;
     
-    if(data.email_address == ""){
+    if(data.email_address == null){
         return res.status(403).json({message: 'Please Enter Valid Email Addresss'});
     }
     // check for other email validations 
 
 
-    if(data.password == ""){
+    if(data.password == null){
         return res.status(403).json({message: 'Please Enter Valid Password'});
     }
     // check for other Password Validations
@@ -111,7 +111,7 @@ const forgotPassword = (req,res)=>{
 }
 
 module.exports = {
-    signUp,
+    signup,
     login,
     forgotPassword
 }
