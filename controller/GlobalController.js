@@ -10,8 +10,8 @@ const getCenters = (req, res) => {
 const getHubs = (req, res) => {
   const hubs = [
     { center_name: "PGI", id: "123" },
-    { center_name: "PGI", id: "123" },
-    { center_name: "PGI", id: "123" },
+    { center_name: "PGI", id: "13" },
+    { center_name: "PGI", id: "1723" },
   ];
   res.status(200).send({ data: hubs });
 };

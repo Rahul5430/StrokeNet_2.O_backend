@@ -52,11 +52,14 @@ const userSchema = new mongoose.Schema({
     "email_address": {
         type: mongoose.SchemaTypes.Email
     },
+    "password":{
+        type:String
+    },
     "phone_number": {
         type: String
     },
     "phone_number_verified": {
-        type: String
+        type: Boolean
     },
     "user_department": {
         type: String
