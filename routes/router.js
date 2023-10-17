@@ -9,5 +9,6 @@ router.post('/auth/login',login);
 router.get('/get_hubs',getHubs);
 router.get('/get_centers',getCenters);
 router.get('/get_global_settings',globalSettings);
+router.get('/patients/add_patient',);
 
 module.exports = router;
