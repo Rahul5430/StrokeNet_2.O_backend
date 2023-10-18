@@ -85,9 +85,6 @@ const userSchema = new mongoose.Schema({
     "token": {
         type: String
     },
-    "token_expire": {
-        type: String
-    },
     "ip": {
         type: String
     },

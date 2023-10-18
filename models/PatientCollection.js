@@ -1,30 +1,30 @@
 const mongoose = require("mongoose");
 const PatientSchema = new mongoose.Schema({
-  first_name: { type: "string", required: true },
-  last_name: { type: "string" },
-  name: { type: "string" },
-  date_of_birth: { type: "string", format: "date" },
-  age: { type: "number" },
-  gender: { type: "string" },
-  weakness_side: { type: "string" },
-  created_by: { type: "string" },
-  contact_number: { type: "string" },
-  address: { type: "string" },
-  covid_score: { type: "number" },
+  first_name: { type: String, required: true },
+  last_name: { type: String },
+  name: { type: String },
+  date_of_birth: { type: String, format: "date" },
+  age: { type: Number },
+  gender: { type: String },
+  weakness_side: { type: String },
+  created_by: { type: String },
+  contact_number: { type: String },
+  address: { type: String },
+  covid_score: { type: Number },
   covid_values: {
     // Define the structure for COVID values
   },
-  center_id: { type: "string" },
-  datetime_of_stroke: { type: "string", format: "date-time" },
-  datetime_of_stroke_timeends: { type: "string", format: "date-time" },
-  last_updated: { type: "string", format: "date-time" },
-  created: { type: "string", format: "date-time" },
-  admission_time: { type: "string", format: "date-time" },
+  center_id: { type: String },
+  datetime_of_stroke: { type: String, format: "date-time" },
+  datetime_of_stroke_timeends: { type: String, format: "date-time" },
+  last_updated: { type: String, format: "date-time" },
+  created: { type: String, format: "date-time" },
+  admission_time: { type: String, format: "date-time" },
   datetime_of_stroke_fortyfive_deadline: {
-    type: "string",
+    type: String,
     format: "date-time",
   },
-  patient_code: { type: "string" },
+  patient_code: { type: String },
   isHubUser: { type: "boolean" },
   isSpokeUser: { type: "boolean" },
   isCenterUser: { type: "boolean" },
@@ -33,9 +33,9 @@ const PatientSchema = new mongoose.Schema({
     items: {
       type: "object",
       properties: {
-        status_id: { type: "number" },
-        user_id: { type: "string" },
-        created: { type: "string", format: "date-time" },
+        status_id: { type: Number },
+        user_id: { type: String },
+        created: { type: String, format: "date-time" },
       },
     },
   },
@@ -65,26 +65,30 @@ const PatientSchema = new mongoose.Schema({
     items: {
       type: "object",
       properties: {
-        file_type: { type: "string" },
-        scan_type: { type: "string" },
-        file: { type: "string" },
-        created: { type: "string", format: "date-time" },
+        file_type: { type: String },
+        scan_type: { type: String },
+        file: { type: String },
+        created: { type: String, format: "date-time" },
       },
     },
   },
-  window_period: { type: "string" },
-  nihss_admission: { type: "string" },
+  window_period: { type: String },
+  nihss_admission: { type: String },
   getPushIDs: {
     type: "object",
     properties: {
       pushIDs: {
         type: "array",
-        items: { type: "string" },
+        items: { type: String },
       },
       mobileNumbers: {
         type: "array",
-        items: { type: "string" },
+        items: { type: String },
       },
     },
   },
 });
+
+const Patient = mongoose.model('PateintCollection',PatientSchema);
+
+module.exports = Patient;
