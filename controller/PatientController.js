@@ -20,7 +20,7 @@ const addPatient = async (req, res) => {
       }
 
       if (errors.length > 0) {
-        return res.status(403).json({data:{ message: errors[0] }});
+        return res.status(403).json({ data: { message: errors[0] } });
       } else {
         const patientData = {};
 
@@ -96,14 +96,14 @@ const addPatient = async (req, res) => {
 
         // More data assignments...
         const savedPatient = await Patient.insertMany([patientData]);
-        return res.status(200).json({data:savedPatient[0]});
+        return res.status(200).json({ data: savedPatient[0] });
       }
     } else {
-      return res.status(403).json({data:{ message: "INVALID_CREDENTIALS" }});
+      return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
     }
   } catch (error) {
     console.error("An error occurred:", error);
-    return res.status(500).json({data:{ message: "An error occurred" }});
+    return res.status(500).json({ data: { message: "An error occurred" } });
   }
 };
 
@@ -449,125 +449,206 @@ const getUserPatients = async (request, response) => {
   }
 };
 
-const getSinglePatient = async (req,res) => {
+const getSinglePatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  const patientId = req.params.patientId;
+  const patientId = req.params.id;
 
   if (headerUserId && headerUserToken) {
-    const patientDetails = getPatientDetails(patientId, headerUserId);
-
-    const output = { status: 'success', data: patientDetails };
-    res.status(200).json(output);
+    try {
+      const patientDetails = await getPatientDetails(patientId, headerUserId);
+      const output = { data: patientDetails };
+      console.log(output);
+      res.status(200).json(output);
+    } catch (err) {
+      const output = { data: { message: "Something went wrong" } };
+      res.status(403).json(output);
+    }
   } else {
-    const output = { status: 'error', message: 'INVALID_CREDENTIALS' };
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
     res.status(403).json(output);
   }
-}
+};
 
-const getPatientDetails = async(patientID, userId) => {
-    // Get the information of the patient
-    let patient = await this.ci.db.get("patients", "*", { "id": patientID });
-    patient.covid_score = parseInt(patient.covid_score);
-    patient.covid_values = JSON.parse(patient.covid_values);
+const getPatientDetails = async (patientID, userId) => {
+  // Get the information of the patient
+  console.log(patientID);
+  let patient = await Patient.findById(patientID);
+  patient.covid_values = JSON.parse(patient.covid_values);
 
-    patient.created = new Date(patient.created * 1000).toLocaleString();
-    patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
+  patient.created = new Date(patient.created * 1000).toLocaleString();
+  // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
 
-    // Check if patient information checked already
-    patient.patient_checked = await this.patientCheckedbyUser(patient.id, userId, patient.last_updated);
+  const roughpatient = {
+    _id: patient._id,
+    stroke_type: "H",
+    show_stroke_type_text: "Yes",
+    show_increment_timer: 1,
+    show_decrement_timer: 0,
+    show_original_name: "yes",
+    name: "Nitin",
+    patient_code: "123",
+    created_by: "23",
+    last_updated: "12hr",
+    gender: "Male",
+    age: 20,
+    covid_score: 10,
+    show_tfso_total_time_message_box: 12,
+    // show_45_minutes_deadline_box:10,
+    patient_basic_details: {
+      admission_time_formatted: 0,
+      body_weight: null,
+      blood_group: "",
+      bpx: 1,
+      bpy: 2,
+      rbs: "",
+      inr: "",
+      aspects: "",
+      is_wakeup_stroke: "",
+      is_hospital_stroke: "",
+      weakness_side: "",
+      co_morbidities: "",
+      similar_episodes_in_past: "",
+      inclusion_exclusion_assessed: "",
+      notes: "",
+    },
+    patient_scan_times: {
+      ct_scan_time_formatted: 1,
+      mr_scan_time_formatted: 1,
+      mr_mra_time_formatted: 1,
+      dsa_time_completed_formatted: 1,
+    },
+    user_data: {},
+    patient_complications: {
+      bed_score: 12,
+      bed_sore_degree: 60,
+      bed_score_duration: 12,
+      aspiration: 13,
+      aspiration_duration: 12,
+      deep_vein_thormobosis: 12,
+      deep_vein_thormobosis_site: 10,
+      deep_vein_thormobosis_duration: 12,
+    },
+    patient_contradictions: { show_ivtineligible_box: 0 },
+    showIVTProtocolBox: 1,
+    patient_nihss: {
+      admission: { nihss_value: 12 },
+      "24_hours": { nihss_value: 12 },
+      discharge: { nihss_value: 10 },
+    },
+    patient_mrs: {
+      discharge: {
+        mrs_points: 12,
+      },
+      "1_month": {
+        discharge: { mrs_points: 10 },
+        mrs_points: 12,
+      },
+      "3_months": {
+        mrs_points: 12,
+      },
+    },
+  };
 
-    patient.last_update = await this.ci.db.get("patient_updates", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
-    if (patient.last_update && patient.last_update.id) {
-        patient.last_update.user_id = this.getUserDetailsBasic(patient.last_update.user_id);
-    }
+  // patient.show_original_name="yes";
+  // patient.admission_time_formatted="yes";
+  roughpatient.covid_values = patient.covid_values;
+  roughpatient.covid_score = patient.covid_score;
 
-    patient.last_message = await this.getLastMessageFromPatientConversations(userId, patientID);
+  // // Check if patient information checked already
+  // patient.patient_checked = await this.patientCheckedbyUser(patient.id, userId, patient.last_updated);
 
-    // Calculate Age of the patient
-    const today = new Date();
-    const dateOfBirth = new Date(patient.date_of_birth);
-    const ageDiff = Math.abs(today - dateOfBirth);
-    patient.age = Math.floor(ageDiff / (1000 * 60 * 60 * 24 * 365.25));
+  // patient.last_update = await this.ci.db.get("patient_updates", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
+  // if (patient.last_update && patient.last_update.id) {
+  //     patient.last_update.user_id = this.getUserDetailsBasic(patient.last_update.user_id);
+  // }
 
-    const datetimeStrokeStarts = new Date(patient.datetime_of_stroke).getTime();
-    const datetimeStrokeEnds = new Date(patient.datetime_of_stroke_timeends).getTime();
-    const currentTime = new Date().getTime();
+  // patient.last_message = await this.getLastMessageFromPatientConversations(userId, patientID);
 
-    if (currentTime > datetimeStrokeStarts) {
-        patient.show_increment_timer = true;
-    }
+  // // Calculate Age of the patient
+  // const today = new Date();
+  // const dateOfBirth = new Date(patient.date_of_birth);
+  // const ageDiff = Math.abs(today - dateOfBirth);
+  // patient.age = Math.floor(ageDiff / (1000 * 60 * 60 * 24 * 365.25));
 
-    const getPatientTransitionStatusesOfEntry = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 1 OR status_id = 2 OR status_id = 19) ORDER BY id DESC LIMIT 1");
-    for (let key in getPatientTransitionStatusesOfEntry) {
-        if (typeof getPatientTransitionStatusesOfEntry[key] === "object") {
-            delete getPatientTransitionStatusesOfEntry[key];
-        }
-    }
-    if (getPatientTransitionStatusesOfEntry.length > 0) {
-        const fortyfiveminsStart = new Date(getPatientTransitionStatusesOfEntry[0].created).getTime();
-        const fortyfiveminsEnds = new Date(fortyfiveminsStart + 45 * 60 * 1000).toLocaleString();
-        if (currentTime > fortyfiveminsStart && currentTime < new Date(fortyfiveminsEnds).getTime()) {
-            patient.show_decrement_timer = true;
-            patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
-        } else {
-            patient.show_decrement_timer = false;
-            patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
-        }
-    }
+  // const datetimeStrokeStarts = new Date(patient.datetime_of_stroke).getTime();
+  // const datetimeStrokeEnds = new Date(patient.datetime_of_stroke_timeends).getTime();
+  // const currentTime = new Date().getTime();
 
-    // Hide Decrement timer if TFSO is more than 4.5 hours
-    const checkTFSO = new Date(new Date(patient.datetime_of_stroke).getTime() + 4.5 * 60 * 60 * 1000).toLocaleString();
-    if (datetimeStrokeStarts > currentTime) {
-        patient.show_decrement_timer = false;
-    }
+  // if (currentTime > datetimeStrokeStarts) {
+  //     patient.show_increment_timer = true;
+  // }
 
-    // Stop all timers if any of the status is available: IVT and MT ineligible, or Clock is stopped
-    const getPatientTransitionStatusesOfEntryForStoppingClock = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 11 OR status_id = 16 OR status_id = 17 OR status_id = 23 OR status_id = 25) ORDER BY id DESC LIMIT 1");
-    for (let key in getPatientTransitionStatusesOfEntryForStoppingClock) {
-        if (typeof getPatientTransitionStatusesOfEntryForStoppingClock[key] === "object") {
-            delete getPatientTransitionStatusesOfEntryForStoppingClock[key];
-        }
-    }
+  // const getPatientTransitionStatusesOfEntry = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 1 OR status_id = 2 OR status_id = 19) ORDER BY id DESC LIMIT 1");
+  // for (let key in getPatientTransitionStatusesOfEntry) {
+  //     if (typeof getPatientTransitionStatusesOfEntry[key] === "object") {
+  //         delete getPatientTransitionStatusesOfEntry[key];
+  //     }
+  // }
+  // if (getPatientTransitionStatusesOfEntry.length > 0) {
+  //     const fortyfiveminsStart = new Date(getPatientTransitionStatusesOfEntry[0].created).getTime();
+  //     const fortyfiveminsEnds = new Date(fortyfiveminsStart + 45 * 60 * 1000).toLocaleString();
+  //     if (currentTime > fortyfiveminsStart && currentTime < new Date(fortyfiveminsEnds).getTime()) {
+  //         patient.show_decrement_timer = true;
+  //         patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
+  //     } else {
+  //         patient.show_decrement_timer = false;
+  //         patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
+  //     }
+  // }
 
-    if (getPatientTransitionStatusesOfEntryForStoppingClock.length > 0) {
-        const clockedStoppedat = new Date(getPatientTransitionStatusesOfEntryForStoppingClock[0].created);
-        const dateA = new Date(patient.datetime_of_stroke);
-        const dateB = new Date(clockedStoppedat);
-        const interval = new Date(dateA - dateB);
+  // // Hide Decrement timer if TFSO is more than 4.5 hours
+  // const checkTFSO = new Date(new Date(patient.datetime_of_stroke).getTime() + 4.5 * 60 * 60 * 1000).toLocaleString();
+  // if (datetimeStrokeStarts > currentTime) {
+  //     patient.show_decrement_timer = false;
+  // }
 
-        const dateArray = [];
-        if (interval.getUTCDate() > 0) {
-            dateArray.push(interval.getUTCDate() + "d");
-        }
-        if (interval.getUTCHours() > 0) {
-            dateArray.push(interval.getUTCHours() + "h");
-        }
-        if (interval.getUTCMinutes() > 0) {
-            dateArray.push(interval.getUTCMinutes() + "m");
-        }
-        if (interval.getUTCSeconds() > 0) {
-            dateArray.push(interval.getUTCSeconds() + "s");
-        }
-        patient.show_increment_timer = false;
-        patient.show_tfso_total_time_message_box = true;
-        patient.show_total_time_taken_from_entry = dateArray.join(" : ");
+  // // Stop all timers if any of the status is available: IVT and MT ineligible, or Clock is stopped
+  // const getPatientTransitionStatusesOfEntryForStoppingClock = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 11 OR status_id = 16 OR status_id = 17 OR status_id = 23 OR status_id = 25) ORDER BY id DESC LIMIT 1");
+  // for (let key in getPatientTransitionStatusesOfEntryForStoppingClock) {
+  //     if (typeof getPatientTransitionStatusesOfEntryForStoppingClock[key] === "object") {
+  //         delete getPatientTransitionStatusesOfEntryForStoppingClock[key];
+  //     }
+  // }
 
-        // Needle Time Clock
-        const getPatientIVTTimes = this.ci.db.get("patient_ivt_times", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
-        if (getPatientIVTTimes && getPatientIVTTimes.id) {
-            patient.needle_time_at_stroke_entry = new Date(patient.datetime_of_stroke).getTime();
-            patient.needle_time_total_time = new Date(getPatientIVTTimes.datetime_of_stroke + getPatientIVTTimes.time * 1000);
-        } else {
-            patient.needle_time_at_stroke_entry = null;
-            patient.needle_time_total_time = null;
-        }
+  // if (getPatientTransitionStatusesOfEntryForStoppingClock.length > 0) {
+  //     const clockedStoppedat = new Date(getPatientTransitionStatusesOfEntryForStoppingClock[0].created);
+  //     const dateA = new Date(patient.datetime_of_stroke);
+  //     const dateB = new Date(clockedStoppedat);
+  //     const interval = new Date(dateA - dateB);
 
-    } else {
-        patient.show_tfso_total_time_message_box = false;
-    }
+  //     const dateArray = [];
+  //     if (interval.getUTCDate() > 0) {
+  //         dateArray.push(interval.getUTCDate() + "d");
+  //     }
+  //     if (interval.getUTCHours() > 0) {
+  //         dateArray.push(interval.getUTCHours() + "h");
+  //     }
+  //     if (interval.getUTCMinutes() > 0) {
+  //         dateArray.push(interval.getUTCMinutes() + "m");
+  //     }
+  //     if (interval.getUTCSeconds() > 0) {
+  //         dateArray.push(interval.getUTCSeconds() + "s");
+  //     }
+  //     patient.show_increment_timer = false;
+  //     patient.show_tfso_total_time_message_box = true;
+  //     patient.show_total_time_taken_from_entry = dateArray.join(" : ");
 
-    return patient;
-}
+  //     // Needle Time Clock
+  //     const getPatientIVTTimes = this.ci.db.get("patient_ivt_times", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
+  //     if (getPatientIVTTimes && getPatientIVTTimes.id) {
+  //         patient.needle_time_at_stroke_entry = new Date(patient.datetime_of_stroke).getTime();
+  //         patient.needle_time_total_time = new Date(getPatientIVTTimes.datetime_of_stroke + getPatientIVTTimes.time * 1000);
+  //     } else {
+  //         patient.needle_time_at_stroke_entry = null;
+  //         patient.needle_time_total_time = null;
+  //     }
 
-module.exports = { addPatient, getUserPatients,getSinglePatient };
+  // } else {
+  //     patient.show_tfso_total_time_message_box = false;
+  // }
+
+  return roughpatient;
+};
+
+module.exports = { addPatient, getUserPatients, getSinglePatient };
