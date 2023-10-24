@@ -17,6 +17,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.6.2",
     "mongoose-type-email": "^1.1.2",
+    "multer": "^1.4.5-lts.1",
     "plivo": "^4.58.0"
   }
 }

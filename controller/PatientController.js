@@ -1153,82 +1153,6 @@ const addPatientScanFile = async (req, res) => {
   res.status(200).json(output);
 };
 
-// const multer = require('multer');   - Add this line in the index.js main server file.
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));   - Add this line as well
-
-//  This is the storage variable used to define where and how files are going to be stored
-const storage = multer.diskStorage({
-    destination: function(req,file,cb){
-        // cb(error , folder_name)   - This is a callback function
-        const absolutePath = path.join(__dirname, 'uploads');
-        return cb(null,absolutePath)
-
-    },
-    filename: async function(req,file,cb){
-        const filename = `${Date.now()}-${file.originalname}`;
-        const filepath = 'http://localhost:8000/uploads/'+filename;
-        const image = await Image.create({
-            filename: filename,
-            filepath: filepath
-        });
-        return cb(null,filename);
-    }
-});
-
-
-
-
-const uploadFile = async (req,res)=>{
-    // const multer = require('multer');   - Add this line in the index.js main server file.
-    // app.use('/uploads', express.static(path.join(__dirname, 'uploads')));   - Add this line as well
-
-    //  This is the storage variable used to define where and how files are going to be stored
-    const storage = multer.diskStorage({
-        destination: function(req,file,cb){
-            // cb(error , folder_name)   - This is a callback function
-            const absolutePath = path.join(__dirname, 'uploads');
-            return cb(null,absolutePath)
-
-        },
-        filename: async function(req,file,cb){
-            const filename = `${Date.now()}-${file.originalname}`;
-            const filepath = 'http://localhost:8000/uploads/'+filename;
-            return cb(null,filename);
-        }
-    });
-
-    // This is the upload variable which will be used as a middleware
-    // You have to write upload.single(filename -> the name used in input tag)
-    const upload = multer({storage: storage});
-
-    app.post('/upload',upload.single('profileImage'),(req,res)=>{
-        // console.log(req.body);
-        // console.log(req.file);
-    
-        return res.status(200);
-    });
-
-    // first of all get the req.file and then update the patient using patient id
-    const patient_id = req.body.patient_id;
-    const file = req.file;
-    const patient = await Patient.find({_id: patient_id});
-    const patient_file = {
-        file_type: req.body.file_type,
-        scan_type: req.body.scan_type,
-        file: req.body.file
-    }
-    patient.patient_files.push(patient_file);
-
-    return res.status(200);
-};
-
-const getFiles = async (req,res)=>{
-    // console.log("hello");
-    var patients_files = await Patient.find({}).populate(patient_files);
-    // console.log(patients);
-    return res.status(200).json({data: patients_files});
-}
-
 module.exports = {
   addPatient,
   getUserPatients,
@@ -1240,6 +1164,4 @@ module.exports = {
   updateMRSofPatient,
   scansUploadedAlertToTeam,
   addPatientScanFile,
-  uploadFile,
-  getFiles
 };
