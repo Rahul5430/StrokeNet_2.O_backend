@@ -1,3 +1,5 @@
+const Page = require("../models/PageCollection");
+
 const getCenters = (req, res) => {
   const centers = [
     { center_name: "PGI", id: "123" },
@@ -86,4 +88,10 @@ const globalSettings = (req, res) => {
   res.status(200).json(output);
 };
 
-module.exports = { getCenters, getHubs, globalSettings };
+const getSinglePage = async(req,res) => {
+  const pageId = req.params.pageId;
+  const PageContent = await Page.findOne({id:pageId});
+  res.status(200).send({data:PageContent});
+}
+
+module.exports = { getCenters, getHubs, globalSettings,getSinglePage };

@@ -150,8 +150,21 @@ const forgotPassword = (req, res) => {
   // Implement the forgotPassword Function
 };
 
+const validateUser = (req,res) => {
+  const userId = req.headers.userid;
+  const userToken = req.headers.usertoken;
+  jwt.verify(userToken,process.env.REFRESH_TOKEN_SECRET_KEY,(err,decoded)=>{
+    if(err){
+      res.json(false);
+    }else{
+      return res.json(decoded.userId==userId);
+    }
+  })
+};
+
 module.exports = {
   signup,
   login,
   forgotPassword,
+  validateUser,
 };

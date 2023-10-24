@@ -2,41 +2,26 @@ const mongoose = require("mongoose");
 const PatientSchema = new mongoose.Schema({
   first_name: { type: String, required: true },
   last_name: { type: String },
-  //   name: { type: String },
-  //   date_of_birth: { type: String, format: "date" },
-  //   age: { type: Number },
-  //   gender: { type: String },
-  //   weakness_side: { type: String },
-  //   created_by: { type: String },
-  //   contact_number: { type: String },
-  //   address: { type: String },
-  //   covid_score: { type: Number },
-  //   covid_values: {},
-  //   center_id: { type: String },
-  //   datetime_of_stroke: { type: String, format: "date-time" },
-  //   datetime_of_stroke_timeends: { type: String, format: "date-time" },
-  //   last_updated: { type: String, format: "date-time" },
-  //   created: { type: String, format: "date-time" },
-  //   admission_time: { type: String, format: "date-time" },
-  //   datetime_of_stroke_fortyfive_deadline: {
-  //     type: String,
-  //     format: "date-time",
-  //   },
-  //   patient_code: { type: String },
-  //   isHubUser: { type: "boolean" },
-  //   isSpokeUser: { type: "boolean" },
-  //   isCenterUser: { type: "boolean" },
-  //   transition_statuses: {
-  //     type: "array",
-  //     items: {
-  //       type: "object",
-  //       properties: {
-  //         status_id: { type: Number },
-  //         user_id: { type: String },
-  //         created: { type: String, format: "date-time" },
-  //       },
-  //     },
-  //   },
+  name: { type: String },
+  date_of_birth: { type: String, format: "date" },
+  age: { type: Number },
+  gender: { type: String },
+  weakness_side: { type: String },
+  contact_number: { type: String },
+  isHubUser: { type: "boolean" },
+  isSpokeUser: { type: "boolean" },
+  isCenterUser: { type: "boolean" },
+  transition_statuses: {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        status_id: { type: Number },
+        user_id: { type: String },
+        created: { type: String, format: "date-time" },
+      },
+    },
+  },
   //   patient_presentations: {
   //     // Define structure for patient presentations
   //   },
@@ -70,22 +55,25 @@ const PatientSchema = new mongoose.Schema({
   //       },
   //     },
   //   },
-  //   window_period: { type: String },
-  //   nihss_admission: { type: String },
-  //   getPushIDs: {
-  //     type: "object",
-  //     properties: {
-  //       pushIDs: {
-  //         type: "array",
-  //         items: { type: String },
-  //       },
-  //       mobileNumbers: {
-  //         type: "array",
-  //         items: { type: String },
-  //       },
-  //     },
-  //   },
-  covid_values: {},
+  window_period: { type: String },
+  nihss_admission: { type: String },
+  getPushIDs: {
+    type: "object",
+    properties: {
+      pushIDs: {
+        type: "array",
+        items: { type: String },
+      },
+      mobileNumbers: {
+        type: "array",
+        items: { type: String },
+      },
+    },
+  },
+  covid_values: {
+    type: String,
+    default: "",
+  },
   stroke_type: {
     type: String,
     default: "H",
@@ -111,7 +99,6 @@ const PatientSchema = new mongoose.Schema({
   },
   patient_code: {
     type: String,
-    default: "123",
   },
   admission_time: { type: String, format: "date-time" },
   datetime_of_stroke_fortyfive_deadline: {
@@ -120,11 +107,9 @@ const PatientSchema = new mongoose.Schema({
   },
   created_by: {
     type: String,
-    default: "23",
   },
   last_updated: {
     type: String,
-    default: "12hr",
   },
   gender: {
     type: String,
@@ -168,7 +153,6 @@ const PatientSchema = new mongoose.Schema({
     },
     body_weight: {
       type: Number,
-      default: null,
     },
     blood_group: {
       type: String,
@@ -179,11 +163,9 @@ const PatientSchema = new mongoose.Schema({
     },
     bp_x: {
       type: Number,
-      default: 1,
     },
     bp_y: {
       type: Number,
-      default: 2,
     },
     rbs: {
       type: String,
@@ -358,9 +340,9 @@ const PatientSchema = new mongoose.Schema({
     others_duration: {
       type: String,
     },
-    last_updated:{
-      type:String,
-      formate:"date-time",
+    last_updated: {
+      type: String,
+      formate: "date-time",
     },
   },
   patient_contradictions: {
@@ -368,6 +350,7 @@ const PatientSchema = new mongoose.Schema({
       type: Number,
       default: 0,
     },
+    default: {},
   },
   showIVTProtocolBox: {
     type: Number,
@@ -378,24 +361,27 @@ const PatientSchema = new mongoose.Schema({
       nihss_value: {
         type: Number,
       },
-      nihss_options:{
-        type:String,
+      nihss_options: {
+        type: String,
+        default: "",
       },
     },
     "24_hours": {
       nihss_value: {
         type: Number,
       },
-      nihss_options:{
-        type:String,
+      nihss_options: {
+        type: String,
+        default: "",
       },
     },
     discharge: {
       nihss_value: {
         type: Number,
       },
-      nihss_options:{
-        type:String,
+      nihss_options: {
+        type: String,
+        default: "",
       },
     },
   },
@@ -403,30 +389,33 @@ const PatientSchema = new mongoose.Schema({
     discharge: {
       mrs_points: {
         type: Number,
-        default: 12,
+      },
+      mrs_options: {
+        type: String,
+        default: "",
       },
     },
     "1_month": {
-      discharge: {
-        mrs_points: {
-          type: Number,
-          default: 10,
-        },
-      },
       mrs_points: {
         type: Number,
-        default: 12,
+      },
+      mrs_options: {
+        type: String,
+        default: "",
       },
     },
     "3_months": {
       mrs_points: {
         type: Number,
-        default: 12,
+      },
+      mrs_options: {
+        type: String,
+        default: "",
       },
     },
   },
 });
 
-const Patient = mongoose.model("PateintCollection", PatientSchema);
+const Patient = mongoose.model("PatientCollection", PatientSchema);
 
 module.exports = Patient;
