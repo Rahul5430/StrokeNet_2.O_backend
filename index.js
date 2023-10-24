@@ -15,7 +15,6 @@ app.use(express.urlencoded());
 
 // using routes
 app.use("/", require("./routes/router"));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 connectDb();
 
