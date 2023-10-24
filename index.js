@@ -3,6 +3,7 @@ const bodyParser = require("body-parser");
 const cookieParser = require('cookie-parser');
 const connectDb = require("./config/mongoose");
 const mongoose = require("mongoose");
+const multer = require("multer");
 const app = express();
 require("dotenv").config();
 
@@ -14,6 +15,7 @@ app.use(express.urlencoded());
 
 // using routes
 app.use("/", require("./routes/router"));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 connectDb();
 
