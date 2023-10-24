@@ -1193,10 +1193,6 @@ const uploadFile = async (req,res)=>{
         filename: async function(req,file,cb){
             const filename = `${Date.now()}-${file.originalname}`;
             const filepath = 'http://localhost:8000/uploads/'+filename;
-            const image = await Image.create({
-                filename: filename,
-                filepath: filepath
-            });
             return cb(null,filename);
         }
     });
@@ -1205,6 +1201,12 @@ const uploadFile = async (req,res)=>{
     // You have to write upload.single(filename -> the name used in input tag)
     const upload = multer({storage: storage});
 
+    app.post('/upload',upload.single('profileImage'),(req,res)=>{
+        // console.log(req.body);
+        // console.log(req.file);
+    
+        return res.status(200);
+    });
 
     // first of all get the req.file and then update the patient using patient id
     const patient_id = req.body.patient_id;
@@ -1216,13 +1218,6 @@ const uploadFile = async (req,res)=>{
         file: req.body.file
     }
     patient.patient_files.push(patient_file);
-
-    app.post('/upload',upload.single('profileImage'),(req,res)=>{
-        console.log(req.body);
-        console.log(req.file);
-    
-        return res.status(200);
-    });
 
     return res.status(200);
 };
