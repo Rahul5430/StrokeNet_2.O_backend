@@ -6,7 +6,7 @@ const changeOnlineStatus = async (req, res) => {
 
   if ((headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
-    if (getUser._id) {
+    if (getUser) {
       if (getUser.online_status) {
         getUser.online_status = false;
         await getUser.save();

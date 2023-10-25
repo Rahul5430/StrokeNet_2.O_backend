@@ -1,4 +1,5 @@
 const Patient = require("../models/PatientCollection");
+const Page = require("../models/PageCollection")
 const User = require("../models/UserCollection");
 const { calculateAge } = require("./BaseController");
 

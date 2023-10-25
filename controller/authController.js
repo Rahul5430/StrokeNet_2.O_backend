@@ -135,12 +135,18 @@ const login = async (req, res) => {
     const payload = {
       userId: user._id,
     };
-    const refreshtoken = jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET_KEY , { expiresIn: "1d" });
-    const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET_KEY, { expiresIn: "1h" });
+    const refreshtoken = jwt.sign(
+      payload,
+      process.env.REFRESH_TOKEN_SECRET_KEY,
+      { expiresIn: "1d" }
+    );
+    const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET_KEY, {
+      expiresIn: "1h",
+    });
     user.token = refreshtoken;
     await user.save();
-    res.cookie('refreshToken', refreshtoken, { httpOnly: true });
-    return res.status(200).json({data:user});
+    res.cookie("refreshToken", refreshtoken, { httpOnly: true });
+    return res.status(200).json({ data: user });
   }
   //  Do further checkings and then return the reqired information
   res.status(403).json({ data: { message: "Invalid Login Credentials" } });
@@ -150,16 +156,18 @@ const forgotPassword = (req, res) => {
   // Implement the forgotPassword Function
 };
 
-const validateUser = (req,res) => {
+const validateUser = async (req, res) => {
   const userId = req.headers.userid;
   const userToken = req.headers.usertoken;
-  jwt.verify(userToken,process.env.REFRESH_TOKEN_SECRET_KEY,(err,decoded)=>{
-    if(err){
-      res.json(false);
-    }else{
-      return res.json(decoded.userId==userId);
+  try {
+    const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
+    if (decoded.userId == userId && (await User.findById(userId))) {
+      return res.json(true);
     }
-  })
+    res.json(false);
+  } catch (err) {
+    res.json(false);
+  }
 };
 
 module.exports = {
