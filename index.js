@@ -7,7 +7,7 @@ const multer = require("multer");
 const path = require("path");
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const absolutePath = path.join(__dirname, "uploads");
+    const absolutePath = "public/files/";
     return cb(null, absolutePath);
   },
   filename: async function (req, file, cb) {
@@ -25,12 +25,15 @@ app.use(cookieParser());
 app.use(cors());
 app.use(express.urlencoded());
 
-// using routes
-app.post("/profile", upload.single("avatar"), function (req, res, next) {
-  console.log(req.file);
-  res.send();
-});
 app.use("/", require("./routes/router"));
+app.use(express.static('public'))
+
+// using routes
+app.post("/upload",upload.single('file'),function (req, res) {
+  console.log(req.file);
+  const fileName = req.file.filename;
+  res.status(200).json(fileName);
+});
 
 connectDb();
 
