@@ -1151,22 +1151,28 @@ const scansUploadedAlertToTeam = async (req, res) => {
 };
 
 const addPatientScanFile = async (req, res) => {
-  try {
-    const filedata = req.body;
-    console.log(req.body);
-    const patientFile = await Patient.findById(filedata.patient_id);
-    const dataForDB = {
-      file_type: filedata.file_type,
-      file: filedata.file,
-    };
-    patientFile.patient_files[filedata.scan_type].push(dataForDB);
-    await patientFile.save();
-    const output = { data: { message: "file_uploaded" } };
-    res.status(200).json(output);
-  } catch (err) {
-    console.log(err);
-    const output = { data: { message: "Something Went Wrong" } };
-    res.status(403).json(output);
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if ((headerUserId, headerUserToken)) {
+    try {
+      const user = await User.findById(headerUserId);
+      const filedata = req.body;
+      const patientFile = await Patient.findById(filedata.patient_id);
+      const dataForDB = {
+        file_type: filedata.file_type,
+        file: filedata.file,
+        user_role: user.user_role,
+        created: Date.now(),
+      };
+      patientFile.patient_files[filedata.scan_type].push(dataForDB);
+      await patientFile.save();
+      const output = { data: { file:dataForDB,message: "file_uploaded" } };
+      res.status(200).json(output);
+    } catch (err) {
+      console.log(err);
+      const output = { data: { message: "Something Went Wrong" } };
+      res.status(403).json(output);
+    }
   }
 };
 
@@ -1176,8 +1182,6 @@ const deletePatientFile = async (req, res) => {
   if ((headerUserId, headerUserToken)) {
     const data = req.body;
     const errors = [];
-
-    // Clean the values in the data (you will need to implement your own cleaning logic)
     if (!data.file_id) {
       errors.push("file_id is required");
     } else if (!data.patient_id) {
@@ -1185,34 +1189,34 @@ const deletePatientFile = async (req, res) => {
     } else if (!data.scan_type) {
       errors.push("Scan type is required");
     }
-
     if (errors.length > 0) {
       const output = { data: { message: errors[0] } };
       res.status(403).json(output);
     } else {
-      try {
-        const filePath =
-          path.join(__dirname, "../public/files/") + data.file_id;
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            const output = { data: { message: "No such file exists" } };
+      const filePath = path.join(__dirname, "../public/files/") + data.file_id;
+      console.log(path.join(__dirname, "../public/files/"));
+      fs.unlink(filePath, async (err) => {
+        if (err) {
+          const output = { data: { message: "No such file exists" } };
+          res.status(403).json(output);
+        } else {
+          console.log("File Deleted");
+          try {
+            const patient = await Patient.findById(data.patient_id);
+            const patientScanTypeFile = patient.patient_files[data.scan_type];
+            patient.patient_files[data.scan_type] = patientScanTypeFile.filter(
+              (item) => item.file !== data.file_id
+            );
+            await patient.save();
+            const output = { data: { message: "file_deleted" } };
             res.status(200).json(output);
-            return;
+          } catch (err) {
+            console.log(err);
+            const output = { data: { message: "Patient Not Valid" } };
+            res.status(403).json(output);
           }
-        });
-        const patient = await Patient.findById(data.patient_id);
-        const patientScanTypeFile = patient.patient_files[data.scan_type];
-        patient.patient_files = patientScanTypeFile.filter(
-          (item) => item.file !== data.file_id
-        );
-        await patient.save();
-        const output = { data: { message: "file_deleted" } };
-        res.status(200).json(output);
-      } catch (err) {
-        console.log(err);
-        const output = { data: { message: "Patient Not Valid" } };
-        res.status(200).json(output);
-      }
+        }
+      });
     }
   } else {
     const output = { data: { message: "INVALID_CREDENTIALS" } };

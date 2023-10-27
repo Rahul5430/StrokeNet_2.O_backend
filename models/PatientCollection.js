@@ -44,9 +44,14 @@ const PatientSchema = new mongoose.Schema({
   //     // Define structure for MRS data
   //   },
   patient_files: {
-    cta_ctp:[],
-    mri:[],
-    ncct:[],
+    cta_ctp: [],
+    mri: [],
+    ncct: [],
+    default: {
+      cta_ctp: [],
+      mri: [],
+      ncct: [],
+    },
     // items: {
     //   type: "object",
     //   properties: {
