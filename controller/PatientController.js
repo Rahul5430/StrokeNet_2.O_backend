@@ -2,6 +2,8 @@ const Patient = require("../models/PatientCollection");
 const Page = require("../models/PageCollection");
 const User = require("../models/UserCollection");
 const { calculateAge } = require("./BaseController");
+const fs = require("fs");
+const path = require("path");
 
 const addPatient = async (req, res) => {
   try {
@@ -1154,8 +1156,8 @@ const addPatientScanFile = async (req, res) => {
     console.log(req.body);
     const patientFile = await Patient.findById(filedata.patient_id);
     const dataForDB = {
-      file_type:filedata.file_type,
-      file:filedata.file
+      file_type: filedata.file_type,
+      file: filedata.file,
     };
     patientFile.patient_files[filedata.scan_type].push(dataForDB);
     await patientFile.save();
@@ -1164,6 +1166,56 @@ const addPatientScanFile = async (req, res) => {
   } catch (err) {
     console.log(err);
     const output = { data: { message: "Something Went Wrong" } };
+    res.status(403).json(output);
+  }
+};
+
+const deletePatientFile = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if ((headerUserId, headerUserToken)) {
+    const data = req.body;
+    const errors = [];
+
+    // Clean the values in the data (you will need to implement your own cleaning logic)
+    if (!data.file_id) {
+      errors.push("file_id is required");
+    } else if (!data.patient_id) {
+      errors.push("Patient Id is invalid");
+    } else if (!data.scan_type) {
+      errors.push("Scan type is required");
+    }
+
+    if (errors.length > 0) {
+      const output = { data: { message: errors[0] } };
+      res.status(403).json(output);
+    } else {
+      try {
+        const filePath =
+          path.join(__dirname, "../public/files/") + data.file_id;
+        fs.unlink(filePath, (err) => {
+          if (err) {
+            const output = { data: { message: "No such file exists" } };
+            res.status(200).json(output);
+            return;
+          }
+        });
+        const patient = await Patient.findById(data.patient_id);
+        const patientScanTypeFile = patient.patient_files[data.scan_type];
+        patient.patient_files = patientScanTypeFile.filter(
+          (item) => item.file !== data.file_id
+        );
+        await patient.save();
+        const output = { data: { message: "file_deleted" } };
+        res.status(200).json(output);
+      } catch (err) {
+        console.log(err);
+        const output = { data: { message: "Patient Not Valid" } };
+        res.status(200).json(output);
+      }
+    }
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
     res.status(403).json(output);
   }
 };
@@ -1179,4 +1231,5 @@ module.exports = {
   updateMRSofPatient,
   scansUploadedAlertToTeam,
   addPatientScanFile,
+  deletePatientFile,
 };

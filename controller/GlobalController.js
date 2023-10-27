@@ -96,7 +96,7 @@ const getSinglePage = async(req,res) => {
 
 const uploadFile = async(req, res) => {
   console.log(req.file);
-  const fileName = req.file.filename;
+  const fileName = req.file?.filename;
   res.status(200).json(fileName);
 }
 

@@ -21,6 +21,7 @@ const {
   updateMRSofPatient,
   scansUploadedAlertToTeam,
   addPatientScanFile,
+  deletePatientFile
 } = require("../controller/PatientController");
 const {changeOnlineStatus} = require("../controller/userController");
 
@@ -48,6 +49,7 @@ router.post("/patients/update_patient_basic_data", updateBasicData);
 router.post("/patients/update_patient_scan_times", updateScanTimesofPatient);
 router.post("/patients/files/add_file",addPatientScanFile);
 router.post("/patients/update_scans_uploaded", scansUploadedAlertToTeam);
+router.post("/patients/files/delete_file",deletePatientFile);
 router.post(
   "/patients/update_patient_complications",
   updatePatientComplications
