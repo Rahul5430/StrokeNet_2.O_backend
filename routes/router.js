@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/UserCollection");
+const path = require('path');
 const {
   getCenters,
   getHubs,
@@ -26,7 +27,7 @@ const {changeOnlineStatus} = require("../controller/userController");
 const multer = require("multer");
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const absolutePath = "public/files/";
+    const absolutePath = path.join(__dirname,"../public/files/");
     return cb(null, absolutePath);
   },
   filename: async function (req, file, cb) {
