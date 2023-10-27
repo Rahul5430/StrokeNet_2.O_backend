@@ -12,8 +12,8 @@ app.use(cookieParser());
 app.use(cors());
 app.use(express.urlencoded());
 
-app.use("/", require("./routes/router"));
 app.use(express.static('public'))
+app.use("/", require("./routes/router"));
 
 connectDb();
 
