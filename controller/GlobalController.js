@@ -94,4 +94,10 @@ const getSinglePage = async(req,res) => {
   res.status(200).send({data:PageContent});
 }
 
-module.exports = { getCenters, getHubs, globalSettings,getSinglePage };
+const uploadFile = async(req, res) => {
+  console.log(req.file);
+  const fileName = req.file.filename;
+  res.status(200).json(fileName);
+}
+
+module.exports = { getCenters, getHubs, globalSettings,getSinglePage,uploadFile };

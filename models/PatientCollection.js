@@ -43,18 +43,20 @@ const PatientSchema = new mongoose.Schema({
   //   patient_mrs: {
   //     // Define structure for MRS data
   //   },
-  //   patient_files: {
-  //     type: "array",
-  //     items: {
-  //       type: "object",
-  //       properties: {
-  //         file_type: { type: String },
-  //         scan_type: { type: String },
-  //         file: { type: String },
-  //         created: { type: String, format: "date-time" },
-  //       },
-  //     },
-  //   },
+  patient_files: {
+    cta_ctp:[],
+    mri:[],
+    ncct:[],
+    // items: {
+    //   type: "object",
+    //   properties: {
+    //     file_type: { type: String },
+    //     scan_type: { type: String },
+    //     file: { type: String },
+    //     created: { type: String, format: "date-time" },
+    //   },
+    // },
+  },
   window_period: { type: String },
   nihss_admission: { type: String },
   getPushIDs: {

@@ -1,5 +1,5 @@
 const Patient = require("../models/PatientCollection");
-const Page = require("../models/PageCollection")
+const Page = require("../models/PageCollection");
 const User = require("../models/UserCollection");
 const { calculateAge } = require("./BaseController");
 
@@ -1149,9 +1149,23 @@ const scansUploadedAlertToTeam = async (req, res) => {
 };
 
 const addPatientScanFile = async (req, res) => {
-  console.log(req.body);
-  const output = { data: { message: "file_uploaded" } };
-  res.status(200).json(output);
+  try {
+    const filedata = req.body;
+    console.log(req.body);
+    const patientFile = await Patient.findById(filedata.patient_id);
+    const dataForDB = {
+      file_type:filedata.file_type,
+      file:filedata.file
+    };
+    patientFile.patient_files[filedata.scan_type].push(dataForDB);
+    await patientFile.save();
+    const output = { data: { message: "file_uploaded" } };
+    res.status(200).json(output);
+  } catch (err) {
+    console.log(err);
+    const output = { data: { message: "Something Went Wrong" } };
+    res.status(403).json(output);
+  }
 };
 
 module.exports = {

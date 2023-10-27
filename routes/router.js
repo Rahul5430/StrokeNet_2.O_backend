@@ -6,6 +6,7 @@ const {
   getHubs,
   globalSettings,
   getSinglePage,
+  uploadFile
 } = require("../controller/GlobalController");
 const { signup, login, validateUser } = require("../controller/authController");
 const {
@@ -22,6 +23,20 @@ const {
 } = require("../controller/PatientController");
 const {changeOnlineStatus} = require("../controller/userController");
 
+const multer = require("multer");
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const absolutePath = "public/files/";
+    return cb(null, absolutePath);
+  },
+  filename: async function (req, file, cb) {
+    const filename = `${Date.now()}-${file.originalname}`;
+    return cb(null, filename);
+  },
+});
+const upload = multer({ storage: storage });
+
+router.post("/upload",upload.single('file'),uploadFile);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.get("/auth/validateUser", validateUser);
