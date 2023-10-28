@@ -107,6 +107,8 @@ const addPatient = async (req, res) => {
           patientData.covid_values = data.covid_values;
         }
 
+        patientData.last_updated = Date.now();
+
         // const center_id = "your_logic_to_retrieve_center_id";
         // patientData.center_id = center_id;
 
@@ -475,10 +477,6 @@ const getSinglePatient = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   const patientId = req.params.id;
 
-  // console.log(headerUserId,headerUserToken);
-  // const output = { data: { message: "Patient Not Found" } };
-  // return res.status(403).json(output);
-
   if (headerUserId && headerUserToken && patientId != undefined) {
     try {
       const patientDetails = await getPatientDetails(patientId, headerUserId);
@@ -751,6 +749,9 @@ const updateBasicData = async (req, res) => {
       patientBasicData.last_updated = new Date().toISOString();
 
       updatePatientBasicDetails.patient_basic_details = patientBasicData;
+
+      updatePatientBasicDetails.last_updated = Date.now();
+
       await updatePatientBasicDetails.save();
 
       // ci.db.update("user_patients", { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
@@ -828,6 +829,9 @@ const updateScanTimesofPatient = async (req, res) => {
 
         const updatePatientScanTimes = await Patient.findById(data.patient_id);
         updatePatientScanTimes.patient_scan_times = patientScanTimes;
+
+        updatePatientScanTimes.last_updated = Date.now();
+
         await updatePatientScanTimes.save();
 
         // Update last_updated field in Patients collection
@@ -999,6 +1003,9 @@ const updatePatientComplications = async (req, res) => {
       );
       // console.log(updatedPatientcomplications);
       updatedPatientcomplications.patient_complications = patientComplications;
+
+      updatedPatientcomplications.last_updated = Date.now();
+
       await updatedPatientcomplications.save();
 
       // await db
@@ -1064,6 +1071,8 @@ const updateNIHSSofPatient = async (req, res) => {
       updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_options =
         patientNIHSS.nihss_options;
 
+      updatedNihssPatient.last_updated = Date.now();
+
       await updatedNihssPatient.save();
 
       const output = {
@@ -1111,6 +1120,8 @@ const updateMRSofPatient = async (req, res) => {
         patientMRS.mrs_options;
       updatedMRSPatient.patient_mrs[data.mrs_time].mrs_points =
         patientMRS.mrs_points;
+
+      updatedMRSPatient.last_updated = Date.now();
       await updatedMRSPatient.save();
 
       // Update last_updated field in Patients table
@@ -1165,8 +1176,10 @@ const addPatientScanFile = async (req, res) => {
         created: Date.now(),
       };
       patientFile.patient_files[filedata.scan_type].push(dataForDB);
+      patientFile.total_scans = patientFile.total_scans + 1;
+      patientFile.last_updated = Date.now();
       await patientFile.save();
-      const output = { data: { file:dataForDB,message: "file_uploaded" } };
+      const output = { data: { file: dataForDB, message: "file_uploaded" } };
       res.status(200).json(output);
     } catch (err) {
       console.log(err);
@@ -1195,6 +1208,12 @@ const deletePatientFile = async (req, res) => {
     } else {
       const filePath = path.join(__dirname, "../public/files/") + data.file_id;
       console.log(path.join(__dirname, "../public/files/"));
+      const patient = await Patient.findById(data.patient_id);
+      if (!patient) {
+        const output = { data: { message: "Patient Not Valid" } };
+        res.status(403).json(output);
+        return;
+      }
       fs.unlink(filePath, async (err) => {
         if (err) {
           const output = { data: { message: "No such file exists" } };
@@ -1202,17 +1221,18 @@ const deletePatientFile = async (req, res) => {
         } else {
           console.log("File Deleted");
           try {
-            const patient = await Patient.findById(data.patient_id);
             const patientScanTypeFile = patient.patient_files[data.scan_type];
             patient.patient_files[data.scan_type] = patientScanTypeFile.filter(
               (item) => item.file !== data.file_id
             );
+            patient.total_scans = patient.total_scans - 1;
+            patient.last_updated = Date.now();
             await patient.save();
             const output = { data: { message: "file_deleted" } };
             res.status(200).json(output);
           } catch (err) {
             console.log(err);
-            const output = { data: { message: "Patient Not Valid" } };
+            const output = { data: { message: "Something Went Wrong" } };
             res.status(403).json(output);
           }
         }

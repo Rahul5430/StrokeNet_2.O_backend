@@ -43,6 +43,10 @@ const PatientSchema = new mongoose.Schema({
   //   patient_mrs: {
   //     // Define structure for MRS data
   //   },
+  total_scans: {
+    type: Number,
+    default: 0,
+  },
   patient_files: {
     cta_ctp: [],
     mri: [],
@@ -117,6 +121,7 @@ const PatientSchema = new mongoose.Schema({
   },
   last_updated: {
     type: String,
+    format: "date-time",
   },
   gender: {
     type: String,

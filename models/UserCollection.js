@@ -3,6 +3,10 @@ require("mongoose-type-email");
 
 const centerIdSchmea = new mongoose.Schema(
   {
+    admin: {
+      type: Boolean,
+      default: false,
+    },
     id: {
       type: Number,
     },
