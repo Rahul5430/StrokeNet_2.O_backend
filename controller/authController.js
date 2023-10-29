@@ -161,12 +161,13 @@ const validateUser = async (req, res) => {
   const userToken = req.headers.usertoken;
   try {
     const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
-    if (decoded.userId == userId && (await User.findById(userId))) {
-      return res.json(true);
+    const userData = await User.findById(userId);
+    if (decoded.userId == userId && userData) {
+      return res.json({ status: true, userData: userData });
     }
-    res.json(false);
+    res.json({ status:false});
   } catch (err) {
-    res.json(false);
+    res.json({ status:false});
   }
 };
 

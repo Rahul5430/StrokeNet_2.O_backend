@@ -27,6 +27,7 @@ const {
   changeOnlineStatus,
   GetUsersForAdmin,
   UserVerification,
+  RemoveUser
 } = require("../controller/userController");
 
 const multer = require("multer");
@@ -43,8 +44,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 router.post("/upload", upload.single("file"), uploadFile);
-router.post("'/UserVerification",UserVerification);
-router.post("'/getUsers",GetUsersForAdmin);
+router.post("/UserVerification", UserVerification);
+router.post("/RemoveUser", RemoveUser);
+router.get("/getUsers", GetUsersForAdmin);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.get("/auth/validateUser", validateUser);
