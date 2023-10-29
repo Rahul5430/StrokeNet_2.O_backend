@@ -48,13 +48,17 @@ const PatientSchema = new mongoose.Schema({
     default: 0,
   },
   patient_files: {
-    cta_ctp: [],
-    mri: [],
-    ncct: [],
-    default: {
-      cta_ctp: [],
-      mri: [],
-      ncct: [],
+    cta_ctp: {
+      type: Array,
+      default: [],
+    },
+    mri: {
+      type: Array,
+      default: [],
+    },
+    ncct: {
+      type: Array,
+      default: [],
     },
     // items: {
     //   type: "object",
