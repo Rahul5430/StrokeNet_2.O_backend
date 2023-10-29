@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/UserCollection");
-const path = require('path');
+const path = require("path");
 const {
   getCenters,
   getHubs,
   globalSettings,
   getSinglePage,
-  uploadFile
+  uploadFile,
 } = require("../controller/GlobalController");
 const { signup, login, validateUser } = require("../controller/authController");
 const {
@@ -21,14 +21,18 @@ const {
   updateMRSofPatient,
   scansUploadedAlertToTeam,
   addPatientScanFile,
-  deletePatientFile
+  deletePatientFile,
 } = require("../controller/PatientController");
-const {changeOnlineStatus} = require("../controller/userController");
+const {
+  changeOnlineStatus,
+  GetUsersForAdmin,
+  UserVerification,
+} = require("../controller/userController");
 
 const multer = require("multer");
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const absolutePath = path.join(__dirname,"../public/files/");
+    const absolutePath = path.join(__dirname, "../public/files/");
     return cb(null, absolutePath);
   },
   filename: async function (req, file, cb) {
@@ -38,7 +42,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-router.post("/upload",upload.single('file'),uploadFile);
+router.post("/upload", upload.single("file"), uploadFile);
+route.post("'/UserVerification",UserVerification);
+route.post("'/getUser",GetUsersForAdmin);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.get("/auth/validateUser", validateUser);
@@ -47,9 +53,9 @@ router.post("/patients/add_patient", addPatient);
 router.get("/patients/user_patients", getUserPatients);
 router.post("/patients/update_patient_basic_data", updateBasicData);
 router.post("/patients/update_patient_scan_times", updateScanTimesofPatient);
-router.post("/patients/files/add_file",addPatientScanFile);
+router.post("/patients/files/add_file", addPatientScanFile);
 router.post("/patients/update_scans_uploaded", scansUploadedAlertToTeam);
-router.post("/patients/files/delete_file",deletePatientFile);
+router.post("/patients/files/delete_file", deletePatientFile);
 router.post(
   "/patients/update_patient_complications",
   updatePatientComplications

@@ -64,7 +64,7 @@ const signup = async (req, res) => {
   const insertUser = {
     first_name: data.first_name,
     last_name: data.last_name,
-    full_name: data.first_name + " " + data.last_name,
+    fullname: data.first_name + " " + data.last_name,
     email_address: data.email_address,
     phone_number: data.phone_number,
     phone_number_verified: false,
