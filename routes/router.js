@@ -43,8 +43,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 router.post("/upload", upload.single("file"), uploadFile);
-route.post("'/UserVerification",UserVerification);
-route.post("'/getUser",GetUsersForAdmin);
+router.post("'/UserVerification",UserVerification);
+router.post("'/getUsers",GetUsersForAdmin);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.get("/auth/validateUser", validateUser);
