@@ -9,6 +9,9 @@ const {
   getSinglePage,
   uploadFile,
 } = require("../controller/GlobalController");
+
+const { fetchAllOnlineUsers } = require("../controller/ConversationController");
+
 const { signup, login, validateUser } = require("../controller/authController");
 const {
   addPatient,
@@ -27,8 +30,15 @@ const {
   changeOnlineStatus,
   GetUsersForAdmin,
   UserVerification,
-  RemoveUser
+  RemoveUser,
 } = require("../controller/userController");
+
+const {
+  sendOTPCode,
+  verifyOTP,
+  sendEmailCode,
+  verifyEmailOtp
+} = require("../controller/OtpController");
 
 const multer = require("multer");
 const storage = multer.diskStorage({
@@ -47,8 +57,13 @@ router.post("/upload", upload.single("file"), uploadFile);
 router.post("/UserVerification", UserVerification);
 router.post("/RemoveUser", RemoveUser);
 router.get("/getUsers", GetUsersForAdmin);
+router.get("/conversations/get_all_online_users", fetchAllOnlineUsers);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
+router.post("/sms/send_otp", sendOTPCode);
+router.post("/email/send_otp", sendEmailCode);
+router.post("/sms/verify_otp", verifyOTP);
+router.post("/email/verify_otp", verifyEmailOtp);
 router.get("/auth/validateUser", validateUser);
 router.get("/auth/update_online_status", changeOnlineStatus);
 router.post("/patients/add_patient", addPatient);

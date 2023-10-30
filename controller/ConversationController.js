@@ -1,1 +1,5 @@
-// You have to implement the same functions which are in Chat Vista.
+const fetchAllOnlineUsers = (req, res) => {
+    
+};
+
+module.exports = { fetchAllOnlineUsers };
