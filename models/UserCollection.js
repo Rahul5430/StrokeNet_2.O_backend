@@ -77,8 +77,9 @@ const userSchema = new mongoose.Schema({
   center_id: {
     type: [centerIdSchmea],
   },
-  onesignal_userid: {
+  fcm_userid: {
     type: String,
+    default:'',
   },
   status: {
     type: String,

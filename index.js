@@ -6,13 +6,14 @@ const mongoose = require("mongoose");
 const app = express();
 require("dotenv").config();
 
+
 const cors = require("cors");
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(cors());
 app.use(express.urlencoded());
 
-app.use(express.static('public'))
+app.use(express.static("public"));
 app.use("/", require("./routes/router"));
 
 connectDb();

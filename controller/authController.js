@@ -1,5 +1,6 @@
 const express = require("express");
 const User = require("../models/UserCollection");
+const {sendNotification} = require("../controller/BaseController");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -102,6 +103,7 @@ const signup = async (req, res) => {
 
 const login = async (req, res) => {
   const data = req.body;
+  console.log(data);
   if (data.email_address == "") {
     return res
       .status(403)
@@ -130,7 +132,10 @@ const login = async (req, res) => {
             "Your account is pending verification. Once its approved, you will be able to access your account.",
         },
       });
-
+    if (data.fcm_userid && data.fcm_userid != "" && data.fcm_userid != user.fcm_userid) {
+      user.fcm_userid = data.fcm_userid;
+      sendNotification(data.fcm_userid);
+    }
     // Payload data (the data you want to include in the token)
     const payload = {
       userId: user._id,
@@ -165,9 +170,9 @@ const validateUser = async (req, res) => {
     if (decoded.userId == userId && userData) {
       return res.json({ status: true, userData: userData });
     }
-    res.json({ status:false});
+    res.json({ status: false });
   } catch (err) {
-    res.json({ status:false});
+    res.json({ status: false });
   }
 };
 

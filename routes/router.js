@@ -25,7 +25,11 @@ const {
   scansUploadedAlertToTeam,
   addPatientScanFile,
   deletePatientFile,
+  codeStrokeAlert,
 } = require("../controller/PatientController");
+const {
+  postTransitionStatus,
+} = require("../controller/PatientAnalysisController");
 const {
   changeOnlineStatus,
   GetUsersForAdmin,
@@ -37,7 +41,7 @@ const {
   sendOTPCode,
   verifyOTP,
   sendEmailCode,
-  verifyEmailOtp
+  verifyEmailOtp,
 } = require("../controller/OtpController");
 
 const multer = require("multer");
@@ -67,6 +71,8 @@ router.post("/email/verify_otp", verifyEmailOtp);
 router.get("/auth/validateUser", validateUser);
 router.get("/auth/update_online_status", changeOnlineStatus);
 router.post("/patients/add_patient", addPatient);
+router.post("/patients/code_stroke_alert_manually", codeStrokeAlert);
+router.post("/patient_analysis/post_transition_status", postTransitionStatus);
 router.get("/patients/user_patients", getUserPatients);
 router.post("/patients/update_patient_basic_data", updateBasicData);
 router.post("/patients/update_patient_scan_times", updateScanTimesofPatient);

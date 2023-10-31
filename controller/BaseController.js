@@ -1,6 +1,29 @@
-const plivo = require("plivo");
+const admin = require("firebase-admin");
+const serviceAccount = require("../google-secrets.json");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
-const sendSMS = () => {};
+const sendNotification = (registrationToken) => {
+  const message = {
+    notification: {
+      title: "Congratulations",
+      body: "User Loged In First Time",
+    },
+    token: registrationToken,
+  };
+console.log(message);
+  // Send the message to the device.
+  admin
+  .messaging()
+  .send(message)
+  .then((response) => {
+    console.log('Successfully sent message:', response);
+  })
+  .catch((error) => {
+    console.error('Error sending message:', error);
+  });
+};
 
 const FormattedDate = (isoDateTime) => {
   if (isoDateTime == "" || isoDateTime == undefined) return isoDateTime;
@@ -42,4 +65,5 @@ const calculateAge = (dateOfBirth) => {
 module.exports = {
   FormattedDate,
   calculateAge,
+  sendNotification,
 };
