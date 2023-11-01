@@ -10,11 +10,14 @@ const sendNotification = (registrationToken, reason) => {
     message = {
       notification: {
         title: "Congratulations",
-        body: "User Loged In First Time",
+        body: "You Logged In",
       },
       android: {
         notification: {
-          sound: "../Recording.m4a",
+          title:"Notification For Andorid",
+          body:"You Logged In StrokeNet",
+          sound: "codestrokeactivated.mp3",
+          // imageUrl:"https://strokenet.onrender.com/files/1698494179874-1000072138.jpg"
         },
       },
       data: {
@@ -26,8 +29,9 @@ const sendNotification = (registrationToken, reason) => {
   } else if (reason == "userAdded") {
     message = {
       notification: {
-        title: "Congratulations",
-        body: "You Logged In ",
+        title: "Admin",
+        body: "New User added",
+        sound: "CODE_STROKE_ACTIVATED.mp3",
       },
       android: {},
       data: {
