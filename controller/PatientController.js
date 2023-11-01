@@ -1250,85 +1250,85 @@ const codeStrokeAlert = (req, res) => {
   if ((headerUserId, headerUserToken)) {
     const data = req.body;
 
-    // const errors = [];
+    const errors = [];
 
-    // if (errors.length > 0) {
-    //   const output = { data: { message: errors[0] } };
-    //   return res.json(output, 403);
-    // } else {
-    //   const getUserCenterId = this.ci.db.get(
-    //     "users",
-    //     ["center_id", "fullname", "user_role"],
-    //     { user_id: headerUserId[0] }
-    //   );
-    //   const getCenterInfo = this.ci.db.get(
-    //     "centers",
-    //     ["id", "center_name", "is_hub", "main_hub"],
-    //     { id: getUserCenterId.center_id }
-    //   );
+    if (errors.length > 0) {
+      const output = { data: { message: errors[0] } };
+      return res.json(output, 403);
+    } else {
+      //   const getUserCenterId = this.ci.db.get(
+      //     "users",
+      //     ["center_id", "fullname", "user_role"],
+      //     { user_id: headerUserId[0] }
+      //   );
+      //   const getCenterInfo = this.ci.db.get(
+      //     "centers",
+      //     ["id", "center_name", "is_hub", "main_hub"],
+      //     { id: getUserCenterId.center_id }
+      //   );
 
-    //   const getHub = this.ci.db.get(
-    //     "centers",
-    //     ["id", "center_name", "short_name", "center_location", "is_hub"],
-    //     { id: getCenterInfo.main_hub }
-    //   );
+      //   const getHub = this.ci.db.get(
+      //     "centers",
+      //     ["id", "center_name", "short_name", "center_location", "is_hub"],
+      //     { id: getCenterInfo.main_hub }
+      //   );
 
-    //   const getPushIDs = [];
-    //   const getPhoneNumbers = [];
+      //   const getPushIDs = [];
+      //   const getPhoneNumbers = [];
 
-    //   let locationType;
+      //   let locationType;
 
-    //   if (getCenterInfo.is_hub === "yes") {
-    //     locationType = "Hub";
+      //   if (getCenterInfo.is_hub === "yes") {
+      //     locationType = "Hub";
 
-    //     const getAllUsersOneSignalFromHub = this.ci.db.select(
-    //       "users",
-    //       ["onesignal_userid", "phone_number"],
-    //       { center_id: getCenterInfo.id }
-    //     );
+      //     const getAllUsersOneSignalFromHub = this.ci.db.select(
+      //       "users",
+      //       ["onesignal_userid", "phone_number"],
+      //       { center_id: getCenterInfo.id }
+      //     );
 
-    //     getAllUsersOneSignalFromHub.forEach((user) => {
-    //       getPushIDs.push(user.onesignal_userid);
-    //       getPhoneNumbers.push("+91" + user.phone_number);
-    //     });
-    //   } else {
-    //     locationType = "Spoke";
+      //     getAllUsersOneSignalFromHub.forEach((user) => {
+      //       getPushIDs.push(user.onesignal_userid);
+      //       getPhoneNumbers.push("+91" + user.phone_number);
+      //     });
+      //   } else {
+      //     locationType = "Spoke";
 
-    //     const getAllUsersOneSignalFromHub = this.ci.db.select(
-    //       "users",
-    //       ["onesignal_userid", "phone_number"],
-    //       { center_id: getCenterInfo.main_hub }
-    //     );
+      //     const getAllUsersOneSignalFromHub = this.ci.db.select(
+      //       "users",
+      //       ["onesignal_userid", "phone_number"],
+      //       { center_id: getCenterInfo.main_hub }
+      //     );
 
-    //     getAllUsersOneSignalFromHub.forEach((user) => {
-    //       getPushIDs.push(user.onesignal_userid);
-    //       getPhoneNumbers.push("+91" + user.phone_number);
-    //     });
+      //     getAllUsersOneSignalFromHub.forEach((user) => {
+      //       getPushIDs.push(user.onesignal_userid);
+      //       getPhoneNumbers.push("+91" + user.phone_number);
+      //     });
 
-    //     const getAllUsersOneSignalFromSpoke = this.ci.db.select(
-    //       "users",
-    //       ["onesignal_userid", "phone_number"],
-    //       { center_id: getUserCenterId.center_id }
-    //     );
+      //     const getAllUsersOneSignalFromSpoke = this.ci.db.select(
+      //       "users",
+      //       ["onesignal_userid", "phone_number"],
+      //       { center_id: getUserCenterId.center_id }
+      //     );
 
-    //     getAllUsersOneSignalFromSpoke.forEach((user) => {
-    //       getPushIDs.push(user.onesignal_userid);
-    //       getPhoneNumbers.push("+91" + user.phone_number);
-    //     });
-    //   }
+      //     getAllUsersOneSignalFromSpoke.forEach((user) => {
+      //       getPushIDs.push(user.onesignal_userid);
+      //       getPhoneNumbers.push("+91" + user.phone_number);
+      //     });
+      //   }
 
-    //   // Create Push Data & Send Push
-    //   const pushData = {
-    //     title: "Code Stroke",
-    //     message: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
-    //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
-    //     devices: getPushIDs,
-    //   };
+      //   // Create Push Data & Send Push
+      //   const pushData = {
+      //     title: "Code Stroke",
+      //     message: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+      //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+      //     devices: getPushIDs,
+      //   };
 
-    //   codeStrokeSendPush(pushData);
+      //   codeStrokeSendPush(pushData);
 
-    // Send SMS (Code for sending SMS is commented out)
-    /*
+      // Send SMS (Code for sending SMS is commented out)
+      /*
       const smsData = {
           to: getPhoneNumbers.join("<"),
           message: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role}) snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
@@ -1336,8 +1336,8 @@ const codeStrokeAlert = (req, res) => {
       sendSMS(smsData);
       */
 
-    // Code for creating calls is also commented out
-    /*
+      // Code for creating calls is also commented out
+      /*
       getPhoneNumbers.forEach((number) => {
           const callData = {
               to: number,
@@ -1346,9 +1346,9 @@ const codeStrokeAlert = (req, res) => {
       });
       */
 
-    const output = { data: { message: "Code Stroke Sent!" } };
-    return res.status(200).json(output);
-    // }
+      const output = { data: { message: "Code Stroke Sent!" } };
+      return res.status(200).json(output);
+    }
   } else {
     const output = { data: { message: "INVALID_CREDENTIALS" } };
     return res.status(403).json(output);

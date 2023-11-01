@@ -4,25 +4,62 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-const sendNotification = (registrationToken) => {
-  const message = {
-    notification: {
-      title: "Congratulations",
-      body: "User Loged In First Time",
-    },
-    token: registrationToken,
-  };
-console.log(message);
-  // Send the message to the device.
-  admin
-  .messaging()
-  .send(message)
-  .then((response) => {
-    console.log('Successfully sent message:', response);
-  })
-  .catch((error) => {
-    console.error('Error sending message:', error);
-  });
+const sendNotification = (registrationToken, reason) => {
+  let message;
+  if (reason == "LoggedIn") {
+    message = {
+      notification: {
+        title: "Congratulations",
+        body: "User Loged In First Time",
+      },
+      android: {
+        notification: {
+          sound: "../Recording.m4a",
+        },
+      },
+      data: {
+        name: "Nitin",
+      },
+      token: registrationToken,
+    };
+    console.log(message);
+  } else if (reason == "userAdded") {
+    message = {
+      notification: {
+        title: "Congratulations",
+        body: "You Logged In ",
+      },
+      android: {},
+      data: {
+        name: "Nitin",
+      },
+      token: registrationToken,
+    };
+  } else {
+    message = {
+      notification: {
+        title: "Congratulations",
+        body: "Notification Recieved",
+      },
+      android: {},
+      data: {
+        name: "Nitin",
+      },
+      token: registrationToken,
+    };
+  }
+  setTimeout(() => {
+    admin
+      .messaging()
+      .send(message)
+      .then((response) => {
+        console.log("Successfully sent message:", response);
+      })
+      .catch((error) => {
+        console.error("Error sending message:", error);
+      });
+  }, 2000);
+  // Send the message to the devices
 };
 
 const FormattedDate = (isoDateTime) => {

@@ -1,6 +1,6 @@
 const express = require("express");
 const User = require("../models/UserCollection");
-const {sendNotification} = require("../controller/BaseController");
+const { sendNotification } = require("../controller/BaseController");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -84,6 +84,9 @@ const signup = async (req, res) => {
 
   const saved_user = await User.insertMany([insertUser]);
 
+  const admin = await User.findOne({ admin: true });
+  sendNotification(admin.fcm_userid, "userAdded");
+
   // Store the user and check if it has been stored or not
   //  if signed up then send an sms to every admin
 
@@ -132,10 +135,17 @@ const login = async (req, res) => {
             "Your account is pending verification. Once its approved, you will be able to access your account.",
         },
       });
-    if (data.fcm_userid && data.fcm_userid != "" && data.fcm_userid != user.fcm_userid) {
+    if (
+      data.fcm_userid &&
+      data.fcm_userid != "" &&
+      data.fcm_userid != user.fcm_userid
+    ) {
       user.fcm_userid = data.fcm_userid;
-      sendNotification(data.fcm_userid);
+      sendNotification(data.fcm_userid, "LoggedIn");
     }
+
+    sendNotification(data.fcm_userid, "LoggedIn");
+
     // Payload data (the data you want to include in the token)
     const payload = {
       userId: user._id,
