@@ -85,6 +85,7 @@ const signup = async (req, res) => {
   const saved_user = await User.insertMany([insertUser]);
 
   const admin = await User.findOne({ admin: true });
+  console.log(admin.fcm_userid);
   sendNotification(admin.fcm_userid, "userAdded");
 
   // Store the user and check if it has been stored or not
@@ -143,9 +144,7 @@ const login = async (req, res) => {
       user.fcm_userid = data.fcm_userid;
       sendNotification(data.fcm_userid, "LoggedIn");
     }
-
-    sendNotification(data.fcm_userid, "LoggedIn");
-
+    
     // Payload data (the data you want to include in the token)
     const payload = {
       userId: user._id,

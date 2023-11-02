@@ -140,7 +140,7 @@ const getUserPatients = async (req, res) => {
     //   { id: getUserCenterId.center_id }
     // );
     const getCenterInfo = getUser.center_id;
-    console.log(getCenterInfo);
+    // console.log(getCenterInfo);
 
     //   let mainHubId = 0;
     //   if (getCenterInfo.main_hub && getCenterInfo.main_hub !== null) {
@@ -621,7 +621,7 @@ const updateBasicData = async (req, res) => {
 
   if ((headerUserId, headerUserToken)) {
     const data = req.body;
-    console.log(data);
+    // console.log(data);
 
     const errors = [];
 
@@ -675,7 +675,7 @@ const updateBasicData = async (req, res) => {
         patientBasicData.handedness = data.handedness;
       }
 
-      console.log(data.is_wakeup_stroke);
+      // console.log(data.is_wakeup_stroke);
       if (data.is_wakeup_stroke && data.is_wakeup_stroke) {
         patientBasicData.is_wakeup_stroke = data.is_wakeup_stroke;
       }
@@ -897,7 +897,7 @@ const updatePatientComplications = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const data = req.body;
-    console.log(req.body);
+    // console.log(req.body);
     const errors = [];
 
     if (!data.patient_id || data.patient_id === "") {
@@ -1047,7 +1047,7 @@ const updateNIHSSofPatient = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const data = req.body;
-    console.log(data);
+    // console.log(data);
     const errors = [];
     if (!data.patient_id) errors.push("patient_id is required");
     else if (!data.nihss_time) errors.push("nihss_time is required");
@@ -1074,6 +1074,8 @@ const updateNIHSSofPatient = async (req, res) => {
       updatedNihssPatient.last_updated = Date.now();
 
       await updatedNihssPatient.save();
+
+      
 
       const output = {
         data: {
@@ -1207,7 +1209,7 @@ const deletePatientFile = async (req, res) => {
       res.status(403).json(output);
     } else {
       const filePath = path.join(__dirname, "../public/files/") + data.file_id;
-      console.log(path.join(__dirname, "../public/files/"));
+      // console.log(path.join(__dirname, "../public/files/"));
       const patient = await Patient.findById(data.patient_id);
       if (!patient) {
         const output = { data: { message: "Patient Not Valid" } };
@@ -1219,7 +1221,6 @@ const deletePatientFile = async (req, res) => {
           const output = { data: { message: "No such file exists" } };
           res.status(403).json(output);
         } else {
-          console.log("File Deleted");
           try {
             const patientScanTypeFile = patient.patient_files[data.scan_type];
             patient.patient_files[data.scan_type] = patientScanTypeFile.filter(
