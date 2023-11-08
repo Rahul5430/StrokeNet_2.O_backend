@@ -29,6 +29,8 @@ const {
 } = require("../controller/PatientController");
 const {
   postTransitionStatus,
+  postComment,
+  getComments,
 } = require("../controller/PatientAnalysisController");
 const {
   changeOnlineStatus,
@@ -85,7 +87,9 @@ router.post(
 );
 router.post("/patients/update_patient_nihss", updateNIHSSofPatient);
 router.post("/patients/update_patient_mrs", updateMRSofPatient);
-router.get("/patients/patient/:id", getSinglePatient);
+router.post("/patient_analysis/post_comment", postComment);
+router.get("/patient_analysis/get_comments/:PatientId", getComments);
+router.get("/patients/patient/:PatientId", getSinglePatient);
 router.get("/get_hubs", getHubs);
 router.get("/get_centers", getCenters);
 router.get("/get_global_settings", globalSettings);

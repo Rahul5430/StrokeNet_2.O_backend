@@ -430,6 +430,10 @@ const PatientSchema = new mongoose.Schema({
       },
     },
   },
+  comments: {
+    type: Array,
+    default: [],
+  },
 });
 
 const Patient = mongoose.model("PatientCollection", PatientSchema);

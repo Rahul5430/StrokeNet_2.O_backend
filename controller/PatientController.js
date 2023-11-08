@@ -475,7 +475,7 @@ const getUserPatients = async (req, res) => {
 const getSinglePatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  const patientId = req.params.id;
+  const patientId = req.params.PatientId;
 
   if (headerUserId && headerUserToken && patientId != undefined) {
     try {
@@ -1074,8 +1074,6 @@ const updateNIHSSofPatient = async (req, res) => {
       updatedNihssPatient.last_updated = Date.now();
 
       await updatedNihssPatient.save();
-
-      
 
       const output = {
         data: {

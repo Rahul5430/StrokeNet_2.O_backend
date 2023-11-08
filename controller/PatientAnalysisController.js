@@ -1,3 +1,6 @@
+const Patient = require("../models/PatientCollection");
+const User = require("../models/UserCollection");
+
 const postTransitionStatus = (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
@@ -161,7 +164,7 @@ const postTransitionStatus = (req, res) => {
       const output = {
         data: {
           message: "Status was updated successfully.",
-        //   transition_statuses: fetchTransitionStatuses(data["patient_id"]),
+          //   transition_statuses: fetchTransitionStatuses(data["patient_id"]),
         },
       };
 
@@ -180,4 +183,45 @@ const postTransitionStatus = (req, res) => {
   }
 };
 
-module.exports = { postTransitionStatus };
+const postComment = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if (headerUserToken && headerUserId) {
+    const patientId = req.body.patientId;
+    const patient = await Patient.findById(patientId);
+    const user = await User.findById(headerUserId);
+    const comments = patient.comments;
+    const newMsg = {
+      message: req.body.message,
+      user_id: {
+        fullname: user.fullname,
+        user_id: user._id,
+      },
+      created: Date.now(),
+    };
+    comments.push(newMsg);
+    await patient.save();
+    res.status(200).send(newMsg);
+  } else {
+    res.send(403).status("hello");
+  }
+};
+
+const getComments = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if (headerUserToken && headerUserId) {
+    try {
+      const patientId = req.params.PatientId;
+      const patient = await Patient.findById(patientId);
+      res.status(200).send({ data: patient.comments });
+    } catch (err) {
+      console.log(err);
+      const output = { data: { message: "Something Went Wrong" } };
+      res.status(403).send(output);
+    }
+  } else {
+  }
+};
+
+module.exports = { postTransitionStatus, postComment, getComments };

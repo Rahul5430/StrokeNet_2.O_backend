@@ -29,14 +29,35 @@ const connectToSocket = (server) => {
       const num = number ? number.size : 0;
     });
 
+    socket.on("joinPatientChatRoom", (data) => {
+      socket.join(data.patientId + "_chat");
+      const number = io.sockets.adapter.rooms.get(data.patientId + "_chat");
+      const num = number ? number.size : 0;
+      console.log(num);
+    });
+
     // socket.on("FileUpload", async(data) => {
     //   const patient = await Patient.findById(data.id);
     //   const filestab = patient.patient_files[data.tab];
     //   console.log(filestab);
     // });
 
+    socket.on("comment_push", (data) => {
+      console.log(data);
+      socket.broadcast
+        .to(data.patientId + "_chat")
+        .emit("comment_pushed", data.message);
+    });
+
     socket.on("UploadsRoomLeft", (data) => {
       socket.leave(data.patientId + "-uploads-" + data.tab);
+    });
+
+    socket.on("PatientChatRoomLeft", (data) => {
+      const number = io.sockets.adapter.rooms.get(data.patientId + "_chat");
+      const num = number ? number.size : 0;
+      // console.log(num);
+      socket.leave(data.patientId + "_chat");
     });
 
     socket.on("PatientRoomLeft", (patientId) => {
@@ -125,6 +146,10 @@ const sendNotification = (registrationToken, reason) => {
       notification: {
         title: "Congratulations",
         body: "Notification Recieved",
+      },
+      data: {
+        redirect: "chat",
+        UserId: "",
       },
       token: registrationToken,
     };
