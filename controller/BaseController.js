@@ -138,13 +138,13 @@ const sendNotification = (registrationToken, reason, data = {}) => {
     console.log(data);
     message = {
       notification: {
-        title: "Admin",
-        body: `New User added having name ${data.name} and ${data.phone_number} phone number`,
+        title: "New User added",
+        body: `Name - ${data.name} and Phone number - ${data.phone_number} `,
       },
       android: {
         notification: {
-          title: "Notification For Andorid",
-          body: "New User Registered In StrokeNet",
+          title: "New User added",
+          body: `Name - ${data.name} and Phone number - ${data.phone_number}`,
           sound: "codestrokeactivated.mp3",
         },
       },
