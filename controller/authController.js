@@ -85,12 +85,9 @@ const signup = async (req, res) => {
     const saved_user = await User.insertMany([insertUser]);
     const admin = await User.findOne({ admin: true });
     if (admin.fcm_userid != "") {
-      sendNotification(admin.fcm_userid, {
-        title: "userAdded",
-        data: {
-          name: insertUser.fullname,
-          phone_number: insertUser.phone_number,
-        },
+      sendNotification(admin.fcm_userid, "userAdded", {
+        name: insertUser.fullname,
+        phone_number: insertUser.phone_number,
       });
     }
     return res.status(200).send({

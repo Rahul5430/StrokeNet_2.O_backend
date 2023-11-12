@@ -115,6 +115,7 @@ const connectToSocket = (server) => {
 };
 
 const sendNotification = (registrationToken, reason, data = {}) => {
+  console.log(reason);
   let message;
   if (reason == "LoggedIn") {
     message = {
@@ -134,17 +135,21 @@ const sendNotification = (registrationToken, reason, data = {}) => {
     };
     // console.log(message);
   } else if (reason == "userAdded") {
+    console.log(data);
     message = {
       notification: {
         title: "Admin",
-        body: "New User added",
+        body: `New User added having name ${data.name} and ${data.phone_number} phone number`,
       },
       android: {
         notification: {
           title: "Notification For Andorid",
           body: "New User Registered In StrokeNet",
-          sound: "CODE_STROKE_ACTIVATED.mp3",
+          sound: "codestrokeactivated.mp3",
         },
+      },
+      data:{
+        redirect:'manage-users',
       },
       token: registrationToken,
     };
