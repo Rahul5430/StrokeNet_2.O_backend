@@ -1,44 +1,6 @@
 const mongoose = require("mongoose");
 require("mongoose-type-email");
 
-const centerIdSchmea = new mongoose.Schema(
-  {
-    id: {
-      type: Number,
-    },
-    center_name: {
-      type: String,
-    },
-    short_name: {
-      type: String,
-    },
-    center_location: {
-      type: String,
-    },
-    contact_number: {
-      type: Number,
-    },
-    is_hub: {
-      type: String,
-    },
-    is_spoke: {
-      type: String,
-    },
-    is_center: {
-      type: String,
-    },
-    main_hub: {
-      type: String,
-    },
-    status: {
-      type: String,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
 const userSchema = new mongoose.Schema({
   admin: {
     type: Boolean,
@@ -74,19 +36,17 @@ const userSchema = new mongoose.Schema({
   user_role: {
     type: String,
   },
-  center_id: {
-    type: [centerIdSchmea],
-  },
+  center_id: {},
   fcm_userid: {
     type: String,
-    default:'',
+    default: "",
   },
   status: {
     type: String,
   },
   online_status: {
     type: Boolean,
-    default: false,
+    default: true,
   },
   chat_notifications: {
     type: String,

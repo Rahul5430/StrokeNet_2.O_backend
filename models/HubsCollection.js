@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const centerSchema = new mongoose.Schema(
+const hubSchema = new mongoose.Schema(
   {
     id: {
       type: Number,
@@ -38,6 +38,6 @@ const centerSchema = new mongoose.Schema(
   }
 );
 
-const Centers = mongoose.model("CentersCollection", centerSchema);
+const Hubs = mongoose.model("HubsCollection", hubSchema);
 
-module.exports = Centers;
+module.exports = Hubs;

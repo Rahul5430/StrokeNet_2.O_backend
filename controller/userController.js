@@ -3,7 +3,6 @@ const User = require("../models/UserCollection");
 const changeOnlineStatus = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-
   if ((headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     if (getUser) {

@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const serviceAccount = require("../google-secrets.json");
 const Patient = require("../models/PatientCollection");
+const User = require("../models/UserCollection");
 const socketIo = require("socket.io");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -81,26 +82,39 @@ const connectToSocket = (server) => {
       }
     });
 
-    socket.on("setUserName", (name) => {
-      socket.username = name;
-      io.emit("usersActivity", {
-        user: name,
-        event: "chatJoined",
-      });
+    socket.on("setChatUserId", (data) => {
+      socket.join(data.senderId);
+      io.to(data.recieverId).emit("joined");
+      const number = io.sockets.adapter.rooms.get(data.recieverId);
+      const num = number ? number.size : 0;
+      console.log(num);
+      if (num) {
+        io.to(data.senderId).emit("joined");
+      }
     });
 
-    socket.on("sendMessage", (message) => {
-      io.emit("message", {
-        msg: message.text,
-        user: socket.username,
-        createdAt: new Date(),
-      });
+    socket.on("setUserId", (data) => {
+      socket.join(data);
+    });
+
+    socket.on("sendMessage", async (data) => {
+      const message = data.message;
+      io.to(message.recieverId).emit("message", message);
       console.log(message);
+      const number = io.sockets.adapter.rooms.get(message.recieverId);
+      const num = number ? number.size : 0;
+      if (num == 0) {
+        const user = await User.findById(message.recieverId);
+        if (user && user.fcm_userid) {
+          sendNotification(user.fcm_userid, "chat", data);
+        }
+      }
+      io.to(message.senderId).emit("sent");
     });
   });
 };
 
-const sendNotification = (registrationToken, reason) => {
+const sendNotification = (registrationToken, reason, data = {}) => {
   let message;
   if (reason == "LoggedIn") {
     message = {
@@ -116,12 +130,9 @@ const sendNotification = (registrationToken, reason) => {
           // imageUrl:"https://strokenet.onrender.com/files/1698494179874-1000072138.jpg"
         },
       },
-      data: {
-        name: "Nitin",
-      },
       token: registrationToken,
     };
-    console.log(message);
+    // console.log(message);
   } else if (reason == "userAdded") {
     message = {
       notification: {
@@ -135,21 +146,20 @@ const sendNotification = (registrationToken, reason) => {
           sound: "CODE_STROKE_ACTIVATED.mp3",
         },
       },
-      data: {
-        name: "Nitin",
-      },
       token: registrationToken,
     };
-    console.log(message);
+    // console.log(message);
   } else {
+    console.log(data);
     message = {
       notification: {
-        title: "Congratulations",
-        body: "Notification Recieved",
+        title: data.name,
+        body: data.message.message,
       },
       data: {
         redirect: "chat",
-        UserId: "",
+        fullname: data.name,
+        userId: data.message.senderId,
       },
       token: registrationToken,
     };
@@ -159,7 +169,7 @@ const sendNotification = (registrationToken, reason) => {
     .messaging()
     .send(message)
     .then((response) => {
-      console.log("Successfully sent message:", response);
+      // console.log("Successfully sent message:", response);
     })
     .catch((error) => {
       console.error("Error sending message:", error);

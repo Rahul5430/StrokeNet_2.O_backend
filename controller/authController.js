@@ -1,6 +1,8 @@
 const express = require("express");
 const User = require("../models/UserCollection");
 const { sendNotification } = require("../controller/BaseController");
+const Centers = require("../models/CentersCollection");
+const Hubs = require("../models/HubsCollection");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -63,6 +65,7 @@ const signup = async (req, res) => {
     }
 
     // Now insert the user info in the insertUser Variable
+    const center = await Centers.findOne({ id: data.center_id });
     const insertUser = {
       first_name: data.first_name,
       last_name: data.last_name,
@@ -71,16 +74,13 @@ const signup = async (req, res) => {
       phone_number: data.phone_number,
       phone_number_verified: false,
       password: data.password,
-      center_id: {
-        id: data.center_id,
-      },
+      center_id: center,
       user_department: data.user_department,
       user_role: data.user_role,
       last_login: data.last_login,
       online_status: data.online_status,
       status: data.status,
     };
-
     // Now adding insertUser into the dataBase
     const saved_user = await User.insertMany([insertUser]);
     const admin = await User.findOne({ admin: true });
@@ -100,6 +100,7 @@ const signup = async (req, res) => {
       },
     });
   } catch (err) {
+    console.log(err);
     return res.status(403).send({
       data: {
         message: "Something Went Wrong",
@@ -110,7 +111,7 @@ const signup = async (req, res) => {
 
 const login = async (req, res) => {
   const data = req.body;
-  console.log(data);
+  console.log(req.body);
   if (data.email_address == "") {
     return res
       .status(403)
@@ -153,6 +154,9 @@ const login = async (req, res) => {
       expiresIn: "1h",
     });
     user.token = refreshtoken;
+    if (data.fcm_userid != "") {
+      user.fcm_userid = data.fcm_userid;
+    }
     await user.save();
     res.cookie("refreshToken", refreshtoken, { httpOnly: true });
     return res.status(200).json({ data: user });
