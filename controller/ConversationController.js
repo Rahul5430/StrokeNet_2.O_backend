@@ -63,7 +63,7 @@ const fetchAllOnlineUsers = async (req, res) => {
       console.log(err);
     }
   } else {
-    res.send(403).send({ data: { message: "hello" } });
+    res.send(403).send({ data: { message: "Session Expired" } });
   }
 };
 

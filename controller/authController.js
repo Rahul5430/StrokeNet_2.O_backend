@@ -80,11 +80,14 @@ const signup = async (req, res) => {
       last_login: data.last_login,
       online_status: data.online_status,
       status: data.status,
+      is_hub_user: center.is_hub,
+      is_spoke_user: center.is_spoke,
+      is_center_user: center.is_center,
     };
     // Now adding insertUser into the dataBase
     const saved_user = await User.insertMany([insertUser]);
     const admin = await User.findOne({ admin: true });
-    if (admin.fcm_userid != "") {
+    if (admin && admin.fcm_userid != "") {
       sendNotification(admin.fcm_userid, "userAdded", {
         name: insertUser.fullname,
         phone_number: insertUser.phone_number,
@@ -154,6 +157,7 @@ const login = async (req, res) => {
     if (data.fcm_userid != "") {
       user.fcm_userid = data.fcm_userid;
     }
+    user.last_login = Date.now();
     await user.save();
     res.cookie("refreshToken", refreshtoken, { httpOnly: true });
     return res.status(200).json({ data: user });

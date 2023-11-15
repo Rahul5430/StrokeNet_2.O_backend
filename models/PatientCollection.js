@@ -22,26 +22,9 @@ const PatientSchema = new mongoose.Schema({
       },
     },
   },
+  center_id: {},
   //   patient_presentations: {
   //     // Define structure for patient presentations
-  //   },
-  //   patient_complications: {
-  //     // Define structure for patient complications
-  //   },
-  //   patient_contradictions: {
-  //     // Define structure for patient contradictions
-  //   },
-  //   patient_scan_times: {
-  //     // Define structure for scan times
-  //   },
-  //   patient_ivt_medications: {
-  //     // Define structure for IVT medications
-  //   },
-  //   patient_nihss: {
-  //     // Define structure for NIHSS data
-  //   },
-  //   patient_mrs: {
-  //     // Define structure for MRS data
   //   },
   total_scans: {
     type: Number,

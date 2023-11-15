@@ -68,7 +68,7 @@ const addPatient = async (req, res) => {
         //     today.getMonth(),
         //     today.getDate()
         //   );
-        //   // patientData.date_of_birth = formatDate(pastDate);
+        //   patientData.date_of_birth = formatDate(pastDate);
         // }
 
         if (data.gender) {
@@ -109,8 +109,8 @@ const addPatient = async (req, res) => {
 
         patientData.last_updated = Date.now();
 
-        // const center_id = "your_logic_to_retrieve_center_id";
-        // patientData.center_id = center_id;
+        const center_id = user.center_id;
+        patientData.center_id = center_id;
 
         // patientData.datetime_of_stroke = formatDate(data.datetime_of_stroke);
 
@@ -142,309 +142,317 @@ const getUserPatients = async (req, res) => {
     const getCenterInfo = getUser.center_id;
     // console.log(getCenterInfo);
 
-    //   let mainHubId = 0;
-    //   if (getCenterInfo.main_hub && getCenterInfo.main_hub !== null) {
-    //     mainHubId = getCenterInfo.main_hub;
-    //   } else {
-    //     mainHubId = getCenterInfo.id;
-    //   }
+    let mainHubId = "";
+    if (getCenterInfo.main_hub && getCenterInfo.main_hub !== null) {
+      mainHubId = getCenterInfo.main_hub;
+    } else {
+      mainHubId = getCenterInfo.id;
+    }
 
-    //   const patientTypes = {
-    //     spoke_patients: [],
-    //     hub_spoke_patients: [],
-    //     hub_patients: [],
-    //   };
+    const patientTypes = {
+      spoke_patients: [],
+      hub_spoke_patients: [],
+      hub_patients: [],
+    };
 
-    //   let getSpokePatients;
+    let getSpokePatients;
 
-    //   if (getCenterInfo.is_hub === "yes") {
-    //     getSpokePatients = await this.ci.db.select("user_patients", "*", {
-    //       AND: [{ is_hub: "0" }, { in_transition: "0" }, { hub_id: mainHubId }],
-    //       ORDER: { created: "DESC" },
-    //     });
-    //   } else {
-    //     getSpokePatients = await this.ci.db.select("user_patients", "*", {
-    //       AND: [{ center_id: getUserCenterId.center_id }, { hub_id: mainHubId }],
-    //       ORDER: { created: "DESC" },
-    //     });
-    //   }
+    if (getCenterInfo.is_hub === "yes") {
+      getSpokePatients = await Patient.find({ center_id: getCenterInfo });
+      // getSpokePatients = await this.ci.db.select("user_patients", "*", {
+      //   AND: [{ is_hub: "0" }, { in_transition: "0" }, { hub_id: mainHubId }],
+      //   ORDER: { created: "DESC" },
+      // });
+    } else {
+      getSpokePatients = await Patient.find({ center_id: getCenterInfo });
+      // getSpokePatients = await this.ci.db.select("user_patients", "*", {
+      //   AND: [{ center_id: getUserCenterId.center_id }, { hub_id: mainHubId }],
+      //   ORDER: { created: "DESC" },
+      // });
+    }
+    // if (getCenterInfo.is_hub === "yes") {
+    //   patientTypes.hub_patients = getSpokePatients;
+    // } else patientTypes.spoke_patients = getSpokePatients;
 
-    //   for (const val of getSpokePatients) {
-    //     const patientId = val.patient_id;
-    //     const patientDetails = await this.ci.db.get(
-    //       "patients",
-    //       [
-    //         "id",
-    //         "created_by",
-    //         "name",
-    //         "patient_code",
-    //         "age",
-    //         "gender",
-    //         "last_updated",
-    //         "created",
-    //       ],
-    //       { id: patientId }
-    //     );
-    //     patientDetails.created = new Date(
-    //       patientDetails.created
-    //     ).toLocaleString();
-
-    //     patientDetails.assets = {
-    //       photos: 0,
-    //       videos: 0,
-    //     };
-
-    //     patientDetails.assets.photos = await this.ci.db.count("patient_files", {
-    //       AND: [{ patient_id: patientId }, { file_type: "jpg" }],
-    //     });
-
-    //     patientDetails.assets.videos = await this.ci.db.count("patient_files", {
-    //       AND: [{ patient_id: patientId }, { "file_type[!]": "jpg" }],
-    //     });
-
-    //     const getStrokeType = await this.ci.db.get(
-    //       "patient_scan_times",
-    //       ["type_of_stroke"],
-    //       { patient_id: patientId }
-    //     );
-    //     if (
-    //       getStrokeType.type_of_stroke &&
-    //       getStrokeType.type_of_stroke !== null
-    //     ) {
-    //       if (getStrokeType.type_of_stroke === "Hemorrhagic") {
-    //         patientDetails.show_stroke_type_text = true;
-    //         patientDetails.stroke_type = "H";
-    //       } else {
-    //         patientDetails.show_stroke_type_text = true;
-    //         patientDetails.stroke_type = "I";
-    //       }
-    //     } else {
-    //       patientDetails.show_stroke_type_text = false;
-    //     }
-
-    //     patientDetails.patient_checked = patientCheckedbyUser(
-    //       patientDetails.id,
-    //       headerUserId[0],
-    //       patientDetails.last_updated
-    //     );
-
-    //     patientDetails.is_center_patient = val.is_center === "1";
-    //     patientDetails.is_spoke_patient = val.is_spoke === "1";
-    //     patientDetails.is_hub_patient = val.is_hub === "1";
-    //     patientDetails.in_transition = val.in_transition === "1";
-
-    //     const getTheUserCenterId = await this.ci.db.get("users", ["center_id"], {
-    //       user_id: headerUserId[0],
-    //     });
-    //     const getCenterInfo = await this.ci.db.get(
-    //       "centers",
-    //       ["id", "short_name", "is_hub"],
-    //       { id: getTheUserCenterId.center_id }
-    //     );
-    //     patientDetails.is_user_from_hub = getCenterInfo.is_hub === "yes";
-
-    //     if (patientDetails.is_user_from_hub) {
-    //       if (
-    //         patientDetails.is_hub_patient ||
-    //         (patientDetails.in_transition && patientDetails.is_spoke_patient)
-    //       ) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else {
-    //         patientDetails.can_edit_patient_details = false;
-    //         patientDetails.show_original_name = false;
-    //       }
-    //     } else {
-    //       if (patientDetails.is_spoke_patient && !patientDetails.in_transition) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else if (
-    //         patientDetails.is_center_patient &&
-    //         !patientDetails.in_transition
-    //       ) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else {
-    //         patientDetails.can_edit_patient_details = false;
-    //         patientDetails.show_original_name = false;
-    //       }
-    //     }
-
-    //     const patientCenter = await this.ci.db.get("centers", ["center_name"], {
-    //       id: val.center_id,
-    //     });
-    //     patientDetails.center = patientCenter.center_name;
-
-    //     patientDetails.calculated_times = getPatientCalculatedTimes(
-    //       patientDetails.id
-    //     );
-    //     if (
-    //       patientDetails.calculated_times.times &&
-    //       patientDetails.calculated_times.times.door_to_needle_time !== null
-    //     ) {
-    //       patientDetails.show_ivt_icon = true;
-    //     } else {
-    //       patientDetails.show_ivt_icon = false;
-    //     }
-
-    //     if (
-    //       patientDetails.calculated_times.times &&
-    //       patientDetails.calculated_times.times.mt_started_time !== null
-    //     ) {
-    //       patientDetails.show_mt_icon = true;
-    //     } else {
-    //       patientDetails.show_mt_icon = false;
-    //     }
-
-    //     patientTypes.spoke_patients.push(patientDetails);
-    //   }
-
-    //   const getHubTransitionPatients = await this.ci.db.select(
-    //     "user_patients",
-    //     "*",
-    //     {
-    //       AND: [
-    //         { hub_id: mainHubId },
-    //         {
-    //           OR: [{ in_transition: "1" }, { is_hub: "1" }],
-    //         },
-    //       ],
-    //       ORDER: { created: "DESC" },
-    //     }
-    //   );
-
-    //   for (const val of getHubTransitionPatients) {
-    //     const patientId = val.patient_id;
-    //     const patientDetails = await this.ci.db.get(
-    //       "patients",
-    //       [
-    //         "id",
-    //         "created_by",
-    //         "name",
-    //         "patient_code",
-    //         "age",
-    //         "gender",
-    //         "last_updated",
-    //         "created",
-    //       ],
-    //       { id: patientId }
-    //     );
-    //     patientDetails.created = new Date(
-    //       patientDetails.created
-    //     ).toLocaleString();
-
-    //     patientDetails.assets = {
-    //       photos: 0,
-    //       videos: 0,
-    //     };
-    //     patientDetails.assets.photos = await this.ci.db.count("patient_files", {
-    //       AND: [{ patient_id: patientId }, { file_type: "jpg" }],
-    //     });
-    //     patientDetails.assets.videos = await this.ci.db.count("patient_files", {
-    //       AND: [{ patient_id: patientId }, { "file_type[!]": "jpg" }],
-    //     });
-
-    //     const getStrokeType = await this.ci.db.get(
-    //       "patient_scan_times",
-    //       ["type_of_stroke"],
-    //       { patient_id: patientId }
-    //     );
-    //     if (
-    //       getStrokeType.type_of_stroke &&
-    //       getStrokeType.type_of_stroke !== null
-    //     ) {
-    //       if (getStrokeType.type_of_stroke === "Hemorrhagic") {
-    //         patientDetails.show_stroke_type_text = true;
-    //         patientDetails.stroke_type = "H";
-    //       } else {
-    //         patientDetails.show_stroke_type_text = true;
-    //         patientDetails.stroke_type = "I";
-    //       }
-    //     } else {
-    //       patientDetails.show_stroke_type_text = false;
-    //     }
-
-    //     patientDetails.patient_checked = patientCheckedbyUser(
-    //       patientDetails.id,
-    //       headerUserId[0],
-    //       patientDetails.last_updated
-    //     );
-
-    //     patientDetails.is_spoke_patient = val.is_spoke === "1";
-    //     patientDetails.is_hub_patient = val.is_hub === "1";
-    //     patientDetails.is_center_patient = val.is_center === "1";
-    //     patientDetails.in_transition = val.in_transition === "1";
-
-    //     const getTheUserCenterId = await this.ci.db.get("users", ["center_id"], {
-    //       user_id: headerUserId[0],
-    //     });
-    //     const getCenterInfo = await this.ci.db.get(
-    //       "centers",
-    //       ["id", "short_name", "is_hub"],
-    //       { id: getTheUserCenterId.center_id }
-    //     );
-    //     patientDetails.is_user_from_hub = getCenterInfo.is_hub === "yes";
-
-    //     if (patientDetails.is_user_from_hub) {
-    //       if (
-    //         patientDetails.is_hub_patient ||
-    //         (patientDetails.in_transition &&
-    //           (patientDetails.is_spoke_patient ||
-    //             patientDetails.is_center_patient))
-    //       ) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else {
-    //         patientDetails.can_edit_patient_details = false;
-    //         patientDetails.show_original_name = false;
-    //       }
-    //     } else {
-    //       if (patientDetails.is_spoke_patient && !patientDetails.in_transition) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else if (
-    //         patientDetails.is_center_patient &&
-    //         !patientDetails.in_transition
-    //       ) {
-    //         patientDetails.can_edit_patient_details = true;
-    //         patientDetails.show_original_name = true;
-    //       } else {
-    //         patientDetails.can_edit_patient_details = false;
-    //         patientDetails.show_original_name = false;
-    //       }
-    //     }
-
-    //     const patientCenter = await this.ci.db.get("centers", ["center_name"], {
-    //       id: val.center_id,
-    //     });
-    //     patientDetails.center = patientCenter.center_name;
-
-    //     patientDetails.calculated_times = getPatientCalculatedTimes(
-    //       patientDetails.id
-    //     );
-    //     if (
-    //       patientDetails.calculated_times.times &&
-    //       patientDetails.calculated_times.times.door_to_needle_time !== null
-    //     ) {
-    //       patientDetails.show_ivt_icon = true;
-    //     } else {
-    //       patientDetails.show_ivt_icon = false;
-    //     }
-
-    //     if (
-    //       patientDetails.calculated_times.times &&
-    //       patientDetails.calculated_times.times.mt_started_time !== null
-    //     ) {
-    //       patientDetails.show_mt_icon = true;
-    //     } else {
-    //       patientDetails.show_mt_icon = false;
-    //     }
-
-    //     patientTypes.hub_patients.push(patientDetails);
-    //   }
-
+    for (const val of getSpokePatients) {
+      // const patientId = val._id;
+      const patientDetails = {
+        id: val._id,
+        created_by: val.created_by,
+        name: val.name,
+        patient_code: val._id,
+        age: val.age,
+        gender: val.gender,
+        last_updated: val.last_updated,
+        created: val.createdAt,
+      };
+      // const patientImages=val.patient_files.filter((ele)=>{
+      //   return ele.includes('images');
+      // })
+      // console.log(patientImages);
+      patientDetails.assets = { photos: 0, videos: 0 };
+      Object.keys(val.patient_files).forEach((ele) => {
+        val.patient_files[ele].forEach((file) => {
+          console.log(file);
+          if (file.file_type.includes("image")) {
+            patientDetails.assets.photos += 1;
+          } else patientDetails.assets.videos += 1;
+        });
+      });
+      console.log(patientDetails);
+      //     const patientDetails = await this.ci.db.get(
+      //       "patients",
+      //       [
+      //         "id",
+      //         "created_by",
+      //         "name",
+      //         "patient_code",
+      //         "age",
+      //         "gender",
+      //         "last_updated",
+      //         "created",
+      //       ],
+      //       { id: patientId }
+      //     );
+      //     patientDetails.created = new Date(
+      //       patientDetails.created
+      //     ).toLocaleString();
+      // patientDetails.assets = {
+      //   photos: 0,
+      //   videos: 0,
+      // };
+      //     patientDetails.assets.photos = await this.ci.db.count("patient_files", {
+      //       AND: [{ patient_id: patientId }, { file_type: "jpg" }],
+      //     });
+      //     patientDetails.assets.videos = await this.ci.db.count("patient_files", {
+      //       AND: [{ patient_id: patientId }, { "file_type[!]": "jpg" }],
+      //     });
+      //     const getStrokeType = await this.ci.db.get(
+      //       "patient_scan_times",
+      //       ["type_of_stroke"],
+      //       { patient_id: patientId }
+      //     );
+      //     if (
+      //       getStrokeType.type_of_stroke &&
+      //       getStrokeType.type_of_stroke !== null
+      //     ) {
+      //       if (getStrokeType.type_of_stroke === "Hemorrhagic") {
+      //         patientDetails.show_stroke_type_text = true;
+      //         patientDetails.stroke_type = "H";
+      //       } else {
+      //         patientDetails.show_stroke_type_text = true;
+      //         patientDetails.stroke_type = "I";
+      //       }
+      //     } else {
+      //       patientDetails.show_stroke_type_text = false;
+      //     }
+      //     patientDetails.patient_checked = patientCheckedbyUser(
+      //       patientDetails.id,
+      //       headerUserId[0],
+      //       patientDetails.last_updated
+      //     );
+      //     patientDetails.is_center_patient = val.is_center === "1";
+      //     patientDetails.is_spoke_patient = val.is_spoke === "1";
+      //     patientDetails.is_hub_patient = val.is_hub === "1";
+      //     patientDetails.in_transition = val.in_transition === "1";
+      //     const getTheUserCenterId = await this.ci.db.get("users", ["center_id"], {
+      //       user_id: headerUserId[0],
+      //     });
+      //     const getCenterInfo = await this.ci.db.get(
+      //       "centers",
+      //       ["id", "short_name", "is_hub"],
+      //       { id: getTheUserCenterId.center_id }
+      //     );
+      //     patientDetails.is_user_from_hub = getCenterInfo.is_hub === "yes";
+      //     if (patientDetails.is_user_from_hub) {
+      //       if (
+      //         patientDetails.is_hub_patient ||
+      //         (patientDetails.in_transition && patientDetails.is_spoke_patient)
+      //       ) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else {
+      //         patientDetails.can_edit_patient_details = false;
+      //         patientDetails.show_original_name = false;
+      //       }
+      //     } else {
+      //       if (patientDetails.is_spoke_patient && !patientDetails.in_transition) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else if (
+      //         patientDetails.is_center_patient &&
+      //         !patientDetails.in_transition
+      //       ) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else {
+      //         patientDetails.can_edit_patient_details = false;
+      //         patientDetails.show_original_name = false;
+      //       }
+      //     }
+      //     const patientCenter = await this.ci.db.get("centers", ["center_name"], {
+      //       id: val.center_id,
+      //     });
+      //     patientDetails.center = patientCenter.center_name;
+      //     patientDetails.calculated_times = getPatientCalculatedTimes(
+      //       patientDetails.id
+      //     );
+      //     if (
+      //       patientDetails.calculated_times.times &&
+      //       patientDetails.calculated_times.times.door_to_needle_time !== null
+      //     ) {
+      //       patientDetails.show_ivt_icon = true;
+      //     } else {
+      //       patientDetails.show_ivt_icon = false;
+      //     }
+      //     if (
+      //       patientDetails.calculated_times.times &&
+      //       patientDetails.calculated_times.times.mt_started_time !== null
+      //     ) {
+      //       patientDetails.show_mt_icon = true;
+      //     } else {
+      //       patientDetails.show_mt_icon = false;
+      //     }
+      //     patientTypes.spoke_patients.push(patientDetails);
+      //   }
+      //   const getHubTransitionPatients = await this.ci.db.select(
+      //     "user_patients",
+      //     "*",
+      //     {
+      //       AND: [
+      //         { hub_id: mainHubId },
+      //         {
+      //           OR: [{ in_transition: "1" }, { is_hub: "1" }],
+      //         },
+      //       ],
+      //       ORDER: { created: "DESC" },
+      //     }
+      //   );
+      //   for (const val of getHubTransitionPatients) {
+      //     const patientId = val.patient_id;
+      //     const patientDetails = await this.ci.db.get(
+      //       "patients",
+      //       [
+      //         "id",
+      //         "created_by",
+      //         "name",
+      //         "patient_code",
+      //         "age",
+      //         "gender",
+      //         "last_updated",
+      //         "created",
+      //       ],
+      //       { id: patientId }
+      //     );
+      //     patientDetails.created = new Date(
+      //       patientDetails.created
+      //     ).toLocaleString();
+      //     patientDetails.assets = {
+      //       photos: 0,
+      //       videos: 0,
+      //     };
+      //     patientDetails.assets.photos = await this.ci.db.count("patient_files", {
+      //       AND: [{ patient_id: patientId }, { file_type: "jpg" }],
+      //     });
+      //     patientDetails.assets.videos = await this.ci.db.count("patient_files", {
+      //       AND: [{ patient_id: patientId }, { "file_type[!]": "jpg" }],
+      //     });
+      //     const getStrokeType = await this.ci.db.get(
+      //       "patient_scan_times",
+      //       ["type_of_stroke"],
+      //       { patient_id: patientId }
+      //     );
+      //     if (
+      //       getStrokeType.type_of_stroke &&
+      //       getStrokeType.type_of_stroke !== null
+      //     ) {
+      //       if (getStrokeType.type_of_stroke === "Hemorrhagic") {
+      //         patientDetails.show_stroke_type_text = true;
+      //         patientDetails.stroke_type = "H";
+      //       } else {
+      //         patientDetails.show_stroke_type_text = true;
+      //         patientDetails.stroke_type = "I";
+      //       }
+      //     } else {
+      //       patientDetails.show_stroke_type_text = false;
+      //     }
+      //     patientDetails.patient_checked = patientCheckedbyUser(
+      //       patientDetails.id,
+      //       headerUserId[0],
+      //       patientDetails.last_updated
+      //     );
+      //     patientDetails.is_spoke_patient = val.is_spoke === "1";
+      //     patientDetails.is_hub_patient = val.is_hub === "1";
+      //     patientDetails.is_center_patient = val.is_center === "1";
+      //     patientDetails.in_transition = val.in_transition === "1";
+      //     const getTheUserCenterId = await this.ci.db.get("users", ["center_id"], {
+      //       user_id: headerUserId[0],
+      //     });
+      //     const getCenterInfo = await this.ci.db.get(
+      //       "centers",
+      //       ["id", "short_name", "is_hub"],
+      //       { id: getTheUserCenterId.center_id }
+      //     );
+      //     patientDetails.is_user_from_hub = getCenterInfo.is_hub === "yes";
+      //     if (patientDetails.is_user_from_hub) {
+      //       if (
+      //         patientDetails.is_hub_patient ||
+      //         (patientDetails.in_transition &&
+      //           (patientDetails.is_spoke_patient ||
+      //             patientDetails.is_center_patient))
+      //       ) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else {
+      //         patientDetails.can_edit_patient_details = false;
+      //         patientDetails.show_original_name = false;
+      //       }
+      //     } else {
+      //       if (patientDetails.is_spoke_patient && !patientDetails.in_transition) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else if (
+      //         patientDetails.is_center_patient &&
+      //         !patientDetails.in_transition
+      //       ) {
+      //         patientDetails.can_edit_patient_details = true;
+      //         patientDetails.show_original_name = true;
+      //       } else {
+      //         patientDetails.can_edit_patient_details = false;
+      //         patientDetails.show_original_name = false;
+      //       }
+      //     }
+      //     const patientCenter = await this.ci.db.get("centers", ["center_name"], {
+      //       id: val.center_id,
+      //     });
+      //     patientDetails.center = patientCenter.center_name;
+      //     patientDetails.calculated_times = getPatientCalculatedTimes(
+      //       patientDetails.id
+      //     );
+      //     if (
+      //       patientDetails.calculated_times.times &&
+      //       patientDetails.calculated_times.times.door_to_needle_time !== null
+      //     ) {
+      //       patientDetails.show_ivt_icon = true;
+      //     } else {
+      //       patientDetails.show_ivt_icon = false;
+      //     }
+      //     if (
+      //       patientDetails.calculated_times.times &&
+      //       patientDetails.calculated_times.times.mt_started_time !== null
+      //     ) {
+      //       patientDetails.show_mt_icon = true;
+      //     } else {
+      //       patientDetails.show_mt_icon = false;
+      //     }
+      //     patientTypes.hub_patients.push(patientDetails);
+      if (getCenterInfo.is_hub === "yes") {
+        patientTypes.hub_patients.push(patientDetails);
+      } else {
+        patientTypes.spoke_patients.push(patientDetails);
+      }
+    }
     //   patientTypes.centers = [];
-
     //   if (getCenterInfo.is_hub === "yes") {
     //     const hubSpokePatients = {};
     //     for (const patient of patientTypes.spoke_patients) {
@@ -453,19 +461,14 @@ const getUserPatients = async (req, res) => {
     //         patients: [],
     //       };
     //     }
-
     //     for (const patient of patientTypes.spoke_patients) {
     //       hubSpokePatients[patient.center].patients.push(patient);
     //     }
-
     //     patientTypes.hub_spoke_patients = Object.values(hubSpokePatients);
     //     patientTypes.centers = Object.keys(hubSpokePatients);
-    //   }
-
-    // const output = printData("success", patientTypes);
-    // return res.withJson(output, 200);
-    const output = { data: { message: "INVALID_CREDENTIALS" } };
-    return res.status(403).json(output);
+    // }
+    const output = { data: patientTypes };
+    return res.status(200).json(output);
   } else {
     const output = { date: { message: "INVALID_CREDENTIALS" } };
     return res.status(403).json(output);
@@ -1354,6 +1357,63 @@ const codeStrokeAlert = (req, res) => {
   }
 };
 
+const getHubSpokeCenters = async (req, res, args) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if ((headerUserId, headerUserToken)) {
+    const patientId = args.patientId;
+
+    // Get the current hospital of the patient
+    const getPatientCenter = await this.ci.db
+      .collection("patients")
+      .findOne({ id: patientId }, { center_id: 1, id: 1 });
+
+    if (getPatientCenter && getPatientCenter.id) {
+      // Get the main hub from the center
+      const getHubIdFromCenter = await this.ci.db
+        .collection("centers")
+        .findOne({ id: getPatientCenter.center_id }, { main_hub: 1, id: 1 });
+
+      if (getHubIdFromCenter && getHubIdFromCenter.id) {
+        if (getHubIdFromCenter.main_hub !== null) {
+          // Get the list of all spoke centers where the hub is found
+          const getAllSpokesFromHub = await this.ci.db
+            .collection("centers")
+            .find({
+              main_hub: getHubIdFromCenter.main_hub,
+              is_spoke: "yes",
+            })
+            .toArray();
+
+          // Get Hub as well
+          getAllSpokesFromHub.push(
+            await this.ci.db
+              .collection("centers")
+              .findOne({ id: getHubIdFromCenter.main_hub })
+          );
+
+          const output = printData("success", getAllSpokesFromHub);
+          return res.json(output);
+        } else {
+          const output = printData("error", {
+            message: "Center doesn't have a main hub.",
+          });
+          return res.status(403).json(output);
+        }
+      } else {
+        const output = printData("error", { message: "No such center found" });
+        return res.status(404).json(output);
+      }
+    } else {
+      const output = printData("error", { message: "No such patient found" });
+      return res.status(404).json(output);
+    }
+  } else {
+    const output = printData("error", { message: "INVALID_CREDENTIALS" });
+    return res.status(403).json(output);
+  }
+};
+
 module.exports = {
   addPatient,
   getUserPatients,
@@ -1367,4 +1427,5 @@ module.exports = {
   addPatientScanFile,
   deletePatientFile,
   codeStrokeAlert,
+  getHubSpokeCenters,
 };
