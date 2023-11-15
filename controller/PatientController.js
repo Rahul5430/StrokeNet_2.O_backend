@@ -1,4 +1,5 @@
 const Patient = require("../models/PatientCollection");
+const Centers = require("../models/CentersCollection");
 const Page = require("../models/PageCollection");
 const User = require("../models/UserCollection");
 const { calculateAge } = require("./BaseController");
@@ -108,6 +109,7 @@ const addPatient = async (req, res) => {
         }
 
         patientData.last_updated = Date.now();
+        patientData.created = Date.now();
 
         const center_id = user.center_id;
         patientData.center_id = center_id;
@@ -153,6 +155,7 @@ const getUserPatients = async (req, res) => {
       spoke_patients: [],
       hub_spoke_patients: [],
       hub_patients: [],
+      centers: [],
     };
 
     let getSpokePatients;
@@ -170,12 +173,8 @@ const getUserPatients = async (req, res) => {
       //   ORDER: { created: "DESC" },
       // });
     }
-    // if (getCenterInfo.is_hub === "yes") {
-    //   patientTypes.hub_patients = getSpokePatients;
-    // } else patientTypes.spoke_patients = getSpokePatients;
 
     for (const val of getSpokePatients) {
-      // const patientId = val._id;
       const patientDetails = {
         id: val._id,
         created_by: val.created_by,
@@ -184,22 +183,31 @@ const getUserPatients = async (req, res) => {
         age: val.age,
         gender: val.gender,
         last_updated: val.last_updated,
-        created: val.createdAt,
+        created: val.created,
+        show_original_name: true,
       };
-      // const patientImages=val.patient_files.filter((ele)=>{
-      //   return ele.includes('images');
-      // })
-      // console.log(patientImages);
       patientDetails.assets = { photos: 0, videos: 0 };
       Object.keys(val.patient_files).forEach((ele) => {
         val.patient_files[ele].forEach((file) => {
-          console.log(file);
           if (file.file_type.includes("image")) {
             patientDetails.assets.photos += 1;
           } else patientDetails.assets.videos += 1;
         });
       });
-      console.log(patientDetails);
+      const getStrokeType = val.patient_scan_times;
+      if (
+        getStrokeType.type_of_stroke &&
+        getStrokeType.type_of_stroke !== null
+      ) {
+        if (getStrokeType.type_of_stroke === "Hemorrhagic") {
+          patientDetails.show_stroke_type_text = true;
+          patientDetails.stroke_type = "H";
+        } else {
+          patientDetails.show_stroke_type_text = true;
+          patientDetails.stroke_type = "I";
+        }
+      }
+      // console.log(patientDetails);
       //     const patientDetails = await this.ci.db.get(
       //       "patients",
       //       [
@@ -452,21 +460,61 @@ const getUserPatients = async (req, res) => {
         patientTypes.spoke_patients.push(patientDetails);
       }
     }
-    //   patientTypes.centers = [];
-    //   if (getCenterInfo.is_hub === "yes") {
-    //     const hubSpokePatients = {};
-    //     for (const patient of patientTypes.spoke_patients) {
-    //       hubSpokePatients[patient.center] = {
-    //         name: patient.center,
-    //         patients: [],
-    //       };
-    //     }
-    //     for (const patient of patientTypes.spoke_patients) {
-    //       hubSpokePatients[patient.center].patients.push(patient);
-    //     }
-    //     patientTypes.hub_spoke_patients = Object.values(hubSpokePatients);
-    //     patientTypes.centers = Object.keys(hubSpokePatients);
-    // }
+    // patientTypes.centers = [];
+    if (getCenterInfo.is_hub === "yes") {
+      const spokes = await Centers.find({ main_hub: getCenterInfo.id });
+      for (const spoke of spokes) {
+        const patients = await Patient.find({ center_id: spoke });
+        for (const val of patients) {
+          const patientDetails = {
+            id: val._id,
+            created_by: val.created_by,
+            name: val.name,
+            patient_code: val._id,
+            age: val.age,
+            gender: val.gender,
+            last_updated: val.last_updated,
+            created: val.created,
+            show_original_name: true,
+            center:val.center_id.center_name,
+          };
+          patientDetails.assets = { photos: 0, videos: 0 };
+          Object.keys(val.patient_files).forEach((ele) => {
+            val.patient_files[ele].forEach((file) => {
+              if (file.file_type.includes("image")) {
+                patientDetails.assets.photos += 1;
+              } else patientDetails.assets.videos += 1;
+            });
+          });
+          const getStrokeType = val.patient_scan_times;
+          if (
+            getStrokeType.type_of_stroke &&
+            getStrokeType.type_of_stroke !== null
+          ) {
+            if (getStrokeType.type_of_stroke === "Hemorrhagic") {
+              patientDetails.show_stroke_type_text = true;
+              patientDetails.stroke_type = "H";
+            } else {
+              patientDetails.show_stroke_type_text = true;
+              patientDetails.stroke_type = "I";
+            }
+          }
+          patientTypes.spoke_patients.push(patientDetails);
+        }
+      }
+      const hubSpokePatients = {};
+      for (const patient of patientTypes.spoke_patients) {
+        hubSpokePatients[patient.center] = {
+          name: patient.center,
+          patients: [],
+        };
+      }
+      for (const patient of patientTypes.spoke_patients) {
+        hubSpokePatients[patient.center].patients.push(patient);
+      }
+      patientTypes.hub_spoke_patients = Object.values(hubSpokePatients);
+      patientTypes.centers = Object.keys(hubSpokePatients);
+    }
     const output = { data: patientTypes };
     return res.status(200).json(output);
   } else {
