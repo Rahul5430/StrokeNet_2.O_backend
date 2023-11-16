@@ -107,4 +107,44 @@ const getConversation = async (req, res) => {
   }
 };
 
-module.exports = { fetchAllOnlineUsers, sendMessage, getConversation };
+const UserConversation = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if ((headerUserId, headerUserToken)) {
+    const users = await Conversation.distinct("senderId", {
+      $or: [{ senderId: headerUserId }, { recieverId: headerUserId }],
+    }).distinct("recieverId", {
+      $or: [{ senderId: headerUserId }, { recieverId: headerUserId }],
+    });
+    const ConvoUsers = {
+      active: [],
+      archived: [],
+    };
+    for (const userId of users) {
+      if (userId == headerUserId) {
+        continue;
+      }
+      const user = await User.findById(userId);
+      const modifiedUser = {
+        friend_info: { username: user.fullname, user_id: user._id },
+        last_message: "random",
+        last_message_at: "987654",
+        already_read: true,
+      };
+      // console.log(modifiedUser);
+      if (user.online_status) ConvoUsers.active.push(modifiedUser);
+      else ConvoUsers.archived.push(modifiedUser);
+    }
+    // console.log(ConvoUsers);
+    res.status(200).send({ data: ConvoUsers });
+  } else {
+    res.status(403).send({ data: { message: "Something Went Wrong" } });
+  }
+};
+
+module.exports = {
+  fetchAllOnlineUsers,
+  sendMessage,
+  getConversation,
+  UserConversation,
+};

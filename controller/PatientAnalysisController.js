@@ -1,7 +1,7 @@
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
 
-const postTransitionStatus = (req, res) => {
+const postTransitionStatus = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
@@ -25,13 +25,21 @@ const postTransitionStatus = (req, res) => {
       //     user_id: headerUserId[0],
       //   });
 
-      //   const insertStatusData = {
-      //     user_id: headerUserId[0],
-      //     patient_id: data["patient_id"],
-      //     status_id: data["status_id"],
-      //     center_id: getUserCenterId.center_id,
-      //     created: new Date().toISOString(),
-      //   };
+      const getUserCenterId = await User.findById(headerUserId);
+
+      const insertStatusData = {
+        user_id: headerUserId,
+        patient_id: data["patient_id"],
+        status_id: data["status_id"],
+        center_id: getUserCenterId.center_id,
+        created: new Date().toISOString(),
+      };
+
+      const patient = await Patient.findById(data.patient_id);
+      patient.transition_statuses = insertStatusData;
+      patient.last_updated = Date.now();
+
+      await patient.save();
 
       //   const insertStatus = this.ci.db.insert(
       //     "transition_statuses",
@@ -164,7 +172,7 @@ const postTransitionStatus = (req, res) => {
       const output = {
         data: {
           message: "Status was updated successfully.",
-          //   transition_statuses: fetchTransitionStatuses(data["patient_id"]),
+          // transition_statuses: fetchTransitionStatuses(data["patient_id"]),
         },
       };
 
@@ -178,7 +186,9 @@ const postTransitionStatus = (req, res) => {
     //   }
     // }
   } else {
-    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    const output = {
+      data: { message: "Problem posting your status. Please try again." },
+    };
     return res.staus(403).json(output);
   }
 };

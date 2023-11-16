@@ -2,7 +2,7 @@ const Patient = require("../models/PatientCollection");
 const Centers = require("../models/CentersCollection");
 const Page = require("../models/PageCollection");
 const User = require("../models/UserCollection");
-const { calculateAge } = require("./BaseController");
+const { calculateAge, sendNotification } = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
 
@@ -476,7 +476,7 @@ const getUserPatients = async (req, res) => {
             last_updated: val.last_updated,
             created: val.created,
             show_original_name: true,
-            center:val.center_id.center_name,
+            center: val.center_id.center_name,
           };
           patientDetails.assets = { photos: 0, videos: 0 };
           Object.keys(val.patient_files).forEach((ele) => {
@@ -1294,18 +1294,50 @@ const deletePatientFile = async (req, res) => {
   }
 };
 
-const codeStrokeAlert = (req, res) => {
+const codeStrokeAlert = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
-    const data = req.body;
-
+    const data=req.body;
+    console.log(data);
     const errors = [];
-
+    if(!data.patient_id){
+      errors.push("Patient Id is Not Valid");
+    }
     if (errors.length > 0) {
       const output = { data: { message: errors[0] } };
       return res.json(output, 403);
     } else {
+      const getUserCenterId = await User.findById(headerUserId);
+      const getCenterInfo = getUserCenterId.center_id;
+
+      if (getCenterInfo.is_hub == "yes") {
+        const Users = await User.find({ center_id: getCenterInfo });
+        Users.forEach((user) => {
+          if (user.fcm_userid != "") {
+            sendNotification(user.fcm_userid, "codeStrokeAlert", {
+              getCenterInfo: getCenterInfo,
+              getUserCenterId: getUserCenterId,
+              patientId:data.patient_id
+            });
+          }
+        });
+      } else {
+        const Users = await User.find({ center_id: getCenterInfo });
+        Users.forEach((user) => {
+          if (user.fcm_userid != "") {
+            sendNotification(user.fcm_userid, "codeStrokeAlert", {
+              getCenterInfo: getCenterInfo,
+              getUserCenterId: getUserCenterId,
+              patientId:data.patient_id
+            });
+          }
+        });
+      }
+
+      const output = { data: { message: "Code Stroke Sent!" } };
+      return res.status(200).json(output);
+
       //   const getUserCenterId = this.ci.db.get(
       //     "users",
       //     ["center_id", "fullname", "user_role"],
@@ -1395,9 +1427,6 @@ const codeStrokeAlert = (req, res) => {
           createCall(callData);
       });
       */
-
-      const output = { data: { message: "Code Stroke Sent!" } };
-      return res.status(200).json(output);
     }
   } else {
     const output = { data: { message: "INVALID_CREDENTIALS" } };

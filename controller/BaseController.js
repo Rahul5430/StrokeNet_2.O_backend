@@ -115,7 +115,6 @@ const connectToSocket = (server) => {
 };
 
 const sendNotification = (registrationToken, reason, data = {}) => {
-  console.log(reason);
   let message;
   if (reason == "LoggedIn") {
     message = {
@@ -134,6 +133,27 @@ const sendNotification = (registrationToken, reason, data = {}) => {
       token: registrationToken,
     };
     // console.log(message);
+  } else if (reason == "codeStrokeAlert") {
+    const getCenterInfo = data.getCenterInfo;
+    const getUserCenterId = data.getUserCenterId;
+    message = {
+      notification: {
+        title: "Code Stroke",
+        body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+      },
+      android: {
+        notification: {
+          title: "Code Stroke",
+          body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+          sound: "codestrokeactivated.mp3",
+        },
+      },
+      data: {
+        redirect: "patient-details",
+        patientId:data.patientId,
+      },
+      token: registrationToken,
+    };
   } else if (reason == "userAdded") {
     console.log(data);
     message = {
@@ -148,8 +168,8 @@ const sendNotification = (registrationToken, reason, data = {}) => {
           sound: "codestrokeactivated.mp3",
         },
       },
-      data:{
-        redirect:'manage-users',
+      data: {
+        redirect: "manage-users",
       },
       token: registrationToken,
     };
