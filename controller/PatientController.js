@@ -1209,6 +1209,7 @@ const updateMRSofPatient = async (req, res) => {
 
 const scansUploadedAlertToTeam = async (req, res) => {
   const output = { data: { message: "file_uploaded" } };
+  console.log('uploaded');
   res.status(200).json(output);
 };
 
@@ -1299,7 +1300,7 @@ const codeStrokeAlert = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const data=req.body;
-    console.log(data);
+    // console.log(data);
     const errors = [];
     if(!data.patient_id){
       errors.push("Patient Id is Not Valid");

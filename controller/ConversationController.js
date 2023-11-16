@@ -72,7 +72,7 @@ const sendMessage = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const message = req.body;
-    console.log(message);
+    // console.log(message);
     try {
       const savedMsg = await Conversation.insertMany([message]);
       res.status(200).send({ data: savedMsg[0] });

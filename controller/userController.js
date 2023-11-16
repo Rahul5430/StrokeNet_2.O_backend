@@ -33,7 +33,7 @@ const GetUsersForAdmin = async (req, res) => {
 
   if ((headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
-    console.log(getUser);
+    // console.log(getUser);
     if (getUser && getUser.admin) {
       const VerifiedUsers = await User.find({
         phone_number_verified: true,
@@ -61,7 +61,7 @@ const UserVerification = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
-    console.log(getUser);
+    // console.log(getUser);
     if (getUser && getUser.admin) {
       const UserToVerifyId = req.body.verifyuserId;
       const UserVerify = await User.findById(UserToVerifyId);
@@ -102,7 +102,7 @@ const RemoveUser = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
-    console.log(getUser);
+    // console.log(getUser);
     if (getUser && getUser.admin) {
       const UserToVerifyId = req.body.verifyuserId;
       const UserVerify = await User.deleteOne({ _id: UserToVerifyId });
@@ -135,9 +135,24 @@ const RemoveUser = async (req, res) => {
   }
 };
 
+const RemoveUserFcm = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if ((headerUserId, headerUserToken)) {
+    const getUser = await User.findById(headerUserId);
+    getUser.fcm_userid = "";
+    await getUser.save();
+    res.status(200).send({ data: "FCM Removed" });
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(200).json(output);
+  }
+};
+
 module.exports = {
   changeOnlineStatus,
   GetUsersForAdmin,
   UserVerification,
   RemoveUser,
+  RemoveUserFcm,
 };

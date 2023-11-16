@@ -111,7 +111,7 @@ const signup = async (req, res) => {
 
 const login = async (req, res) => {
   const data = req.body;
-  console.log(req.body);
+  // console.log(req.body);
   if (data.email_address == "") {
     return res
       .status(403)

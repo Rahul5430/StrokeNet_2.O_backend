@@ -37,6 +37,7 @@ const {
   GetUsersForAdmin,
   UserVerification,
   RemoveUser,
+  RemoveUserFcm,
 } = require("../controller/userController");
 
 const {
@@ -53,6 +54,7 @@ const storage = multer.diskStorage({
     return cb(null, absolutePath);
   },
   filename: async function (req, file, cb) {
+    console.log(file.originalname);
     const filename = `${Date.now()}-${file.originalname}`;
     return cb(null, filename);
   },
@@ -62,6 +64,7 @@ const upload = multer({ storage: storage });
 router.post("/upload", upload.single("file"), uploadFile);
 router.post("/UserVerification", UserVerification);
 router.post("/RemoveUser", RemoveUser);
+router.delete("/RemoveUserFcm", RemoveUserFcm);
 router.get("/getUsers", GetUsersForAdmin);
 router.get("/conversations/get_all_online_users", fetchAllOnlineUsers);
 router.post("/conversations/send_message", sendMessage);

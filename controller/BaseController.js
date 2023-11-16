@@ -34,7 +34,7 @@ const connectToSocket = (server) => {
       socket.join(data.patientId + "_chat");
       const number = io.sockets.adapter.rooms.get(data.patientId + "_chat");
       const num = number ? number.size : 0;
-      console.log(num);
+      // console.log(num);
     });
 
     // socket.on("FileUpload", async(data) => {
@@ -44,7 +44,7 @@ const connectToSocket = (server) => {
     // });
 
     socket.on("comment_push", (data) => {
-      console.log(data);
+      // console.log(data);
       socket.broadcast
         .to(data.patientId + "_chat")
         .emit("comment_pushed", data.message);
@@ -87,10 +87,14 @@ const connectToSocket = (server) => {
       io.to(data.recieverId).emit("joined");
       const number = io.sockets.adapter.rooms.get(data.recieverId);
       const num = number ? number.size : 0;
-      console.log(num);
+      // console.log(num);
       if (num) {
         io.to(data.senderId).emit("joined");
       }
+    });
+
+    socket.on("UnsetChatUserId", (data) => {
+      socket.leave(data.senderId);
     });
 
     socket.on("setUserId", (data) => {
@@ -100,7 +104,7 @@ const connectToSocket = (server) => {
     socket.on("sendMessage", async (data) => {
       const message = data.message;
       io.to(message.recieverId).emit("message", message);
-      console.log(message);
+      // console.log(message);
       const number = io.sockets.adapter.rooms.get(message.recieverId);
       const num = number ? number.size : 0;
       if (num == 0) {
@@ -150,12 +154,12 @@ const sendNotification = (registrationToken, reason, data = {}) => {
       },
       data: {
         redirect: "patient-details",
-        patientId:data.patientId,
+        patientId: data.patientId,
       },
       token: registrationToken,
     };
   } else if (reason == "userAdded") {
-    console.log(data);
+    // console.log(data);
     message = {
       notification: {
         title: "New User added",
@@ -175,7 +179,7 @@ const sendNotification = (registrationToken, reason, data = {}) => {
     };
     // console.log(message);
   } else {
-    console.log(data);
+    // console.log(data);
     message = {
       notification: {
         title: data.name,
