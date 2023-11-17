@@ -29,6 +29,28 @@ const chatSchema = new mongoose.Schema(
   }
 );
 
-const Conversation = mongoose.model("Chat", chatSchema);
+const convoSchema = new mongoose.Schema(
+  {
+    uniqueKey: {
+      type: String,
+    },
+    last_message: {
+      type: String,
+    },
+    unreadMsg: {
+      type: Number,
+      default: 0,
+    },
+    created: {
+      type: String,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
-module.exports = Conversation;
+const Conversation = mongoose.model("Chat", chatSchema);
+const UsersConversations = mongoose.model("UserConversation", convoSchema);
+
+module.exports = { Conversation, UsersConversations };

@@ -10,9 +10,19 @@ const {
   uploadFile,
 } = require("../controller/GlobalController");
 
-const { fetchAllOnlineUsers, sendMessage, getConversation,UserConversation } = require("../controller/ConversationController");
+const {
+  fetchAllOnlineUsers,
+  sendMessage,
+  getConversation,
+  UserConversation,
+} = require("../controller/ConversationController");
 
-const { signup, login, validateUser } = require("../controller/authController");
+const {
+  signup,
+  login,
+  validateUser,
+  forgotPassword,
+} = require("../controller/authController");
 const {
   addPatient,
   getUserPatients,
@@ -72,6 +82,7 @@ router.post("/conversations/conversation", getConversation);
 router.post("/conversations/all", UserConversation);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
+router.post("/auth/forgotpassword", forgotPassword);
 router.post("/sms/send_otp", sendOTPCode);
 router.post("/email/send_otp", sendEmailCode);
 router.post("/sms/verify_otp", verifyOTP);

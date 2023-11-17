@@ -1,27 +1,9 @@
 const { OtpEmail, OtpPhone } = require("../models/OtpCollection");
+const { sendemail } = require("./BaseController");
 const User = require("../models/UserCollection");
 const bcrypt = require("bcrypt");
 const otpGenerator = require("otp-generator");
-const nodemailer = require("nodemailer");
 require("dotenv").config();
-
-const sendemail = async (email, OTP) => {
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.OWNER_EMAIL,
-      pass: process.env.OWNER_PASS,
-    },
-  });
-  const mailOptions = {
-    from: process.env.OWNER_EMAIL,
-    to: email,
-    subject: "StrokeNet",
-    text: `Your OTP is ${OTP}`,
-  };
-  var sended = await transporter.sendMail(mailOptions);
-  return sended;
-};
 
 const sendEmailCode = async (req, res) => {
   const email_address = req.body.email_address;
@@ -63,7 +45,7 @@ const sendEmailCode = async (req, res) => {
 
 const verifyEmailOtp = async (req, res) => {
   const data = req.body;
-  console.log(data);
+  // console.log(data);
   const errors = [];
 
   if (!data.email_address || data.email_address === "") {
@@ -105,8 +87,14 @@ const verifyEmailOtp = async (req, res) => {
 const sendOTPCode = async (req, res) => {
   const phone_number = req.body.phone_number;
   const user = await User.findOne({ phone_number: phone_number });
-  if (user) {
+  if (req.body.reason != "signup" && req.body.reason != "login") {
+    const output = { data: { message: "Invalid Reason" } };
+    return res.status(403).json(output);
+  } else if (user && req.body.reason == "signup") {
     const output = { data: { message: "Phone Number Already Registered" } };
+    return res.status(403).json(output);
+  } else if (!user && req.body.reason == "login") {
+    const output = { data: { message: "Phone Number Not Registered" } };
     return res.status(403).json(output);
   }
   const client = require("twilio")(
@@ -156,7 +144,6 @@ const sendOTPCode = async (req, res) => {
 
 const verifyOTP = async (req, res) => {
   const data = req.body;
-  console.log(data);
   const errors = [];
 
   if (!data.phone_number || data.phone_number === "") {
@@ -174,15 +161,33 @@ const verifyOTP = async (req, res) => {
   } else {
     const otpCode = await OtpPhone.findOne({ phoneNumber: data.phone_number });
     if (otpCode && otpCode.otpCode == data.otp_code) {
-      const output = {
-        data: {
-          message: "OTP verified",
-        },
-      };
       await OtpPhone.deleteOne({
         phoneNumber: data.phone_number,
       });
-      res.status(200).json(output);
+      if (data.reason == "login") {
+        const user = await User.findOne({ phone_number: data.phone_number });
+        if (!user) {
+          const output = {
+            data: {
+              message: "User Not Exists",
+            },
+          };
+          return res.status(400).json(output);
+        }
+        if (data.fcm_userid && data.fcm_userid != "") {
+          user.fcm_userid = data.fcm_userid;
+          await user.save();
+        }
+        output = user;
+        res.status(200).json(output);
+      } else {
+        output = {
+          data: {
+            message: "OTP verified",
+          },
+        };
+        res.status(200).json(output);
+      }
     } else {
       const output = {
         data: {

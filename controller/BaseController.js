@@ -3,6 +3,11 @@ const serviceAccount = require("../google-secrets.json");
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
 const socketIo = require("socket.io");
+const {
+  Conversation,
+  UsersConversations,
+} = require("../models/ConversationCollection");
+const nodemailer = require("nodemailer");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -57,7 +62,6 @@ const connectToSocket = (server) => {
     socket.on("PatientChatRoomLeft", (data) => {
       const number = io.sockets.adapter.rooms.get(data.patientId + "_chat");
       const num = number ? number.size : 0;
-      // console.log(num);
       socket.leave(data.patientId + "_chat");
     });
 
@@ -82,12 +86,24 @@ const connectToSocket = (server) => {
       }
     });
 
-    socket.on("setChatUserId", (data) => {
+    socket.on("setChatUserId", async (data) => {
       socket.join(data.senderId);
       io.to(data.recieverId).emit("joined");
+      io.to(data.recieverId).emit("messageSeen");
+      await Conversation.updateMany(
+        {
+          recieverId: data.senderId,
+          senderId: data.recieverId,
+          read_by_user: false,
+        },
+        {
+          $set: {
+            read_by_user: true,
+          },
+        }
+      );
       const number = io.sockets.adapter.rooms.get(data.recieverId);
       const num = number ? number.size : 0;
-      // console.log(num);
       if (num) {
         io.to(data.senderId).emit("joined");
       }
@@ -104,14 +120,28 @@ const connectToSocket = (server) => {
     socket.on("sendMessage", async (data) => {
       const message = data.message;
       io.to(message.recieverId).emit("message", message);
-      // console.log(message);
       const number = io.sockets.adapter.rooms.get(message.recieverId);
       const num = number ? number.size : 0;
+      // console.log(num);
       if (num == 0) {
         const user = await User.findById(message.recieverId);
         if (user && user.fcm_userid) {
           sendNotification(user.fcm_userid, "chat", data);
         }
+      } else {
+        await Conversation.updateMany(
+          {
+            senderId: message.senderId,
+            recieverId: message.recieverId,
+            read_by_user: false,
+          },
+          {
+            $set: {
+              read_by_user: true,
+            },
+          }
+        );
+        io.to(message.senderId).emit("messageSeen");
       }
       io.to(message.senderId).emit("sent");
     });
@@ -243,9 +273,34 @@ const calculateAge = (dateOfBirth) => {
   return age;
 };
 
+const validateEmail = (email) => {
+  const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  return emailRegex.test(email);
+};
+
+const sendemail = async (email, OTP) => {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.OWNER_EMAIL,
+      pass: process.env.OWNER_PASS,
+    },
+  });
+  const mailOptions = {
+    from: process.env.OWNER_EMAIL,
+    to: email,
+    subject: "StrokeNet",
+    text: `Your OTP/Password is ${OTP}`,
+  };
+  var sended = await transporter.sendMail(mailOptions);
+  return sended;
+};
+
 module.exports = {
   FormattedDate,
   calculateAge,
   sendNotification,
   connectToSocket,
+  validateEmail,
+  sendemail,
 };

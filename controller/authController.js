@@ -1,6 +1,10 @@
-const express = require("express");
+const otpGenerator = require("otp-generator");
 const User = require("../models/UserCollection");
-const { sendNotification } = require("../controller/BaseController");
+const {
+  sendNotification,
+  validateEmail,
+  sendemail,
+} = require("../controller/BaseController");
 const Centers = require("../models/CentersCollection");
 const Hubs = require("../models/HubsCollection");
 const jwt = require("jsonwebtoken");
@@ -166,8 +170,32 @@ const login = async (req, res) => {
   res.status(403).json({ data: { message: "Invalid Login Credentials" } });
 };
 
-const forgotPassword = (req, res) => {
-  // Implement the forgotPassword Function
+const forgotPassword = async (req, res) => {
+  try {
+    const email_address = req.body.email_address;
+    if (validateEmail(email_address)) {
+      const user = await User.findOne({ email_address: email_address });
+      console.log(user);
+      if (user) {
+        const otpCode = otpGenerator.generate(6, {
+          specialChars: false,
+        });
+        user.password = otpCode;
+        await user.save();
+        sendemail(email_address, otpCode);
+        res.status(200).send({ data: { message: "OTP Sent to Email" } });
+      } else {
+        return res
+          .status(403)
+          .send({ data: { message: "Email Address Is Not Registered" } });
+      }
+    } else {
+      res.status(403).send({ data: { message: "Invalid Email" } });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ data: { message: "Unable To Send Password" } });
+  }
 };
 
 const validateUser = async (req, res) => {
