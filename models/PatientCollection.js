@@ -12,6 +12,12 @@ const PatientSchema = new mongoose.Schema(
     isHubUser: { type: "boolean" },
     isSpokeUser: { type: "boolean" },
     isCenterUser: { type: "boolean" },
+    is_spoke_patient: { type: "boolean" },
+    is_center_patient: { type: "boolean" },
+    can_be_transitioned_to_spoke: { type: "boolean", default: false },
+    can_be_transitioned_to_hub: { type: "boolean", default: false },
+    scans_completed: { type: "boolean", default: false },
+    scans_exists: { type: "boolean", default: false },
     transition_statuses: {
       type: "array",
       items: {
@@ -53,6 +59,10 @@ const PatientSchema = new mongoose.Schema(
       //     created: { type: String, format: "date-time" },
       //   },
       // },
+    },
+    scans_needed: {
+      type: Boolean,
+      default: true,
     },
     window_period: { type: String },
     nihss_admission: { type: String },
@@ -110,6 +120,26 @@ const PatientSchema = new mongoose.Schema(
     last_updated: {
       type: String,
       format: "date-time",
+    },
+    last_update: {
+      update_type: {
+        type: String,
+      },
+      user_id: {
+        user_id: {
+          type: String,
+        },
+        fullname: {
+          type: String,
+        },
+        user_role: {
+          type: String,
+        },
+      },
+      last_updated: {
+        type: String,
+        format: "date-time",
+      },
     },
     gender: {
       type: String,
@@ -417,6 +447,23 @@ const PatientSchema = new mongoose.Schema(
     comments: {
       type: Array,
       default: [],
+    },
+    last_message: {
+      last_message: {
+        type: String,
+      },
+      user: {
+        fullname: {
+          type: String,
+        },
+        user_role: {
+          type: String,
+        },
+      },
+      last_message_at: {
+        type: String,
+        format: "date-time",
+      },
     },
   },
   { timestamps: true }

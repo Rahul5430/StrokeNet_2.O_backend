@@ -801,6 +801,18 @@ const updateBasicData = async (req, res) => {
 
       updatePatientBasicDetails.patient_basic_details = patientBasicData;
 
+      const user = await User.findById(headerUserId);
+
+      updatePatientBasicDetails.last_update = {
+        update_type: "BasicDetails",
+        user_id: {
+          user_id: user._id,
+          fullname: user.fullname,
+          user_role: user.user_role,
+        },
+        last_updated: Date.now(),
+      };
+
       updatePatientBasicDetails.last_updated = Date.now();
 
       await updatePatientBasicDetails.save();
@@ -882,6 +894,7 @@ const updateScanTimesofPatient = async (req, res) => {
         updatePatientScanTimes.patient_scan_times = patientScanTimes;
 
         updatePatientScanTimes.last_updated = Date.now();
+        updatePatientScanTimes.patient_basic_details.aspects = data.aspects;
 
         await updatePatientScanTimes.save();
 
@@ -1209,7 +1222,7 @@ const updateMRSofPatient = async (req, res) => {
 
 const scansUploadedAlertToTeam = async (req, res) => {
   const output = { data: { message: "file_uploaded" } };
-  console.log('uploaded');
+  console.log("uploaded");
   res.status(200).json(output);
 };
 
@@ -1299,10 +1312,10 @@ const codeStrokeAlert = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
   if ((headerUserId, headerUserToken)) {
-    const data=req.body;
+    const data = req.body;
     // console.log(data);
     const errors = [];
-    if(!data.patient_id){
+    if (!data.patient_id) {
       errors.push("Patient Id is Not Valid");
     }
     if (errors.length > 0) {
@@ -1319,7 +1332,7 @@ const codeStrokeAlert = async (req, res) => {
             sendNotification(user.fcm_userid, "codeStrokeAlert", {
               getCenterInfo: getCenterInfo,
               getUserCenterId: getUserCenterId,
-              patientId:data.patient_id
+              patientId: data.patient_id,
             });
           }
         });
@@ -1330,7 +1343,7 @@ const codeStrokeAlert = async (req, res) => {
             sendNotification(user.fcm_userid, "codeStrokeAlert", {
               getCenterInfo: getCenterInfo,
               getUserCenterId: getUserCenterId,
-              patientId:data.patient_id
+              patientId: data.patient_id,
             });
           }
         });

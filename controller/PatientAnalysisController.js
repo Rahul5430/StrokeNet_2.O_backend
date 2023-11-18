@@ -210,6 +210,14 @@ const postComment = async (req, res) => {
       created: Date.now(),
     };
     comments.push(newMsg);
+    patient.last_message = {
+      last_message: newMsg.message,
+      last_message_at: newMsg.created,
+      user: {
+        fullname: user.fullname,
+        user_role: user.user_role,
+      },
+    };
     await patient.save();
     res.status(200).send(newMsg);
   } else {
