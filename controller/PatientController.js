@@ -5,6 +5,7 @@ const User = require("../models/UserCollection");
 const { calculateAge, sendNotification } = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
+const { ValidateUser } = require("./authController");
 
 const addPatient = async (req, res) => {
   try {
@@ -12,7 +13,7 @@ const addPatient = async (req, res) => {
     const headerUserToken = req.headers.usertoken;
 
     // Validate user (you can implement your user validation logic here)
-    if (headerUserId && headerUserToken) {
+    if (await ValidateUser(headerUserId, headerUserToken)) {
       const data = req.body;
 
       const errors = [];
@@ -132,8 +133,7 @@ const addPatient = async (req, res) => {
 const getUserPatients = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-
-  if (headerUserId && headerUserToken) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     // const getUserCenterId = await User.findById(headerUserId);
     const getUser = await User.findById(headerUserId);
     // const getCenterInfo = await this.ci.db.get(
@@ -518,7 +518,7 @@ const getUserPatients = async (req, res) => {
     const output = { data: patientTypes };
     return res.status(200).json(output);
   } else {
-    const output = { date: { message: "INVALID_CREDENTIALS" } };
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
     return res.status(403).json(output);
   }
 };
@@ -528,8 +528,12 @@ const getSinglePatient = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   const patientId = req.params.PatientId;
 
-  if (headerUserId && headerUserToken && patientId != undefined) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
+      if (!patientId) {
+        const output = { data: { message: "Invalid Patient Id" } };
+        return res.status(403).json(output);
+      }
       const patientDetails = await getPatientDetails(patientId, headerUserId);
       if (patientDetails == null) {
         const output = { data: { message: "Patient Not Found" } };
@@ -670,7 +674,7 @@ const updateBasicData = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
 
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     // console.log(data);
 
@@ -843,7 +847,7 @@ const updateBasicData = async (req, res) => {
 const updateScanTimesofPatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const data = req.body;
       const errors = [];
@@ -959,7 +963,7 @@ const updateScanTimesofPatient = async (req, res) => {
 const updatePatientComplications = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     // console.log(req.body);
     const errors = [];
@@ -1109,7 +1113,7 @@ const updatePatientComplications = async (req, res) => {
 const updateNIHSSofPatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     // console.log(data);
     const errors = [];
@@ -1156,7 +1160,7 @@ const updateNIHSSofPatient = async (req, res) => {
 const updateMRSofPatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     const errors = [];
     if (!data.patient_id || data.patient_id === "") {
@@ -1229,7 +1233,7 @@ const scansUploadedAlertToTeam = async (req, res) => {
 const addPatientScanFile = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const user = await User.findById(headerUserId);
       const filedata = req.body;
@@ -1257,7 +1261,7 @@ const addPatientScanFile = async (req, res) => {
 const deletePatientFile = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     const errors = [];
     if (!data.file_id) {
@@ -1311,7 +1315,7 @@ const deletePatientFile = async (req, res) => {
 const codeStrokeAlert = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
     // console.log(data);
     const errors = [];
@@ -1451,7 +1455,7 @@ const codeStrokeAlert = async (req, res) => {
 const getHubSpokeCenters = async (req, res, args) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const patientId = args.patientId;
 
     // Get the current hospital of the patient

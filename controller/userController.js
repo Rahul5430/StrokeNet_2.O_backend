@@ -1,9 +1,10 @@
 const User = require("../models/UserCollection");
+const { ValidateUser } = require("./authController");
 
 const changeOnlineStatus = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     if (getUser) {
       if (getUser.online_status) {
@@ -31,7 +32,7 @@ const GetUsersForAdmin = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
 
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     // console.log(getUser);
     if (getUser && getUser.admin) {
@@ -59,7 +60,7 @@ const GetUsersForAdmin = async (req, res) => {
 const UserVerification = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     // console.log(getUser);
     if (getUser && getUser.admin) {
@@ -100,7 +101,7 @@ const UserVerification = async (req, res) => {
 const RemoveUser = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     // console.log(getUser);
     if (getUser && getUser.admin) {
@@ -138,7 +139,7 @@ const RemoveUser = async (req, res) => {
 const RemoveUserFcm = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const getUser = await User.findById(headerUserId);
     getUser.fcm_userid = "";
     await getUser.save();

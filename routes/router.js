@@ -8,6 +8,7 @@ const {
   globalSettings,
   getSinglePage,
   uploadFile,
+  contactUs
 } = require("../controller/GlobalController");
 
 const {
@@ -22,6 +23,8 @@ const {
   login,
   validateUser,
   forgotPassword,
+  updateProfile,
+  changePassword
 } = require("../controller/authController");
 const {
   addPatient,
@@ -83,6 +86,8 @@ router.post("/conversations/all", UserConversation);
 router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.post("/auth/forgotpassword", forgotPassword);
+router.post("/auth/change_password", changePassword);
+router.post("/auth/edit_profile", updateProfile);
 router.post("/sms/send_otp", sendOTPCode);
 router.post("/email/send_otp", sendEmailCode);
 router.post("/sms/verify_otp", verifyOTP);
@@ -108,6 +113,7 @@ router.post("/patient_analysis/post_comment", postComment);
 router.get("/patient_analysis/get_comments/:PatientId", getComments);
 router.get("/patients/patient/:PatientId", getSinglePatient);
 router.get("/get_hubs", getHubs);
+router.post("/contact_us", contactUs);
 router.get("/get_centers", getCenters);
 router.get("/get_global_settings", globalSettings);
 router.get("/page/:pageId", getSinglePage);

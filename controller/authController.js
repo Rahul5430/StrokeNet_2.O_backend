@@ -213,9 +213,91 @@ const validateUser = async (req, res) => {
   }
 };
 
+const ValidateUser = async (userId, userToken) => {
+  try {
+    const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
+    const userData = await User.findById(userId);
+    if (decoded.userId == userId && userData) {
+      return true;
+    }
+    return false;
+  } catch (err) {
+    return false;
+  }
+};
+
+const updateProfile = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+
+  if (await ValidateUser(headerUserId, headerUserToken)) {
+    try {
+      const data = req.body;
+      const user = await User.findById(headerUserId);
+      if (user) {
+        user.first_name = data.first_name;
+        user.last_name = data.last_name;
+        user.email_address = data.email_address;
+        user.phone_number = data.phone_number;
+        const updatedUser = await user.save();
+        res.status(200).json({ data: updatedUser });
+      }
+    } catch (err) {
+      console.log(err);
+      const output = { data: { message: "Something Went Wrong" } };
+      return res.status(403).json(output);
+    }
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(403).json(output);
+  }
+};
+
+const changePassword = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+
+  if (await ValidateUser(headerUserId, headerUserToken)) {
+    try {
+      const data = req.body;
+      const user = await User.findById(headerUserId);
+      const errors = [];
+      if (data.new_password == null) {
+        errors.push("Invalid New Password");
+      } else if (data.repeat_password != data.new_password) {
+        errors.push("New Password && Repeat Password Didn't Match");
+      } else if (data.old_password != user.password) {
+        errors.push("Old Password Didn't Match");
+      }
+      if (errors.length > 0) {
+        const output = { data: { message: errors[0] } };
+        return res.status(403).json(output);
+      }
+      if (data.old_password == user.password) {
+        user.password=data.new_password;
+        await user.save();
+        res.status(200).json({ data: "Password Changed" });
+      } else {
+        const output = { data: { message: "Old Password Didn't Match" } };
+        return res.status(403).json(output);
+      }
+    } catch (err) {
+      console.log(err);
+      const output = { data: { message: "Something Went Wrong" } };
+      return res.status(403).json(output);
+    }
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(403).json(output);
+  }
+};
+
 module.exports = {
   signup,
   login,
   forgotPassword,
   validateUser,
+  updateProfile,
+  ValidateUser,
+  changePassword,
 };

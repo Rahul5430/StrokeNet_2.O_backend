@@ -1,10 +1,11 @@
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
+const { ValidateUser } = require("./authController");
 
 const postTransitionStatus = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
 
     const errors = [];
@@ -187,7 +188,7 @@ const postTransitionStatus = async (req, res) => {
     // }
   } else {
     const output = {
-      data: { message: "Problem posting your status. Please try again." },
+      data: { message: "INVALID_CREDENTIALS" },
     };
     return res.staus(403).json(output);
   }
@@ -196,7 +197,7 @@ const postTransitionStatus = async (req, res) => {
 const postComment = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if (headerUserToken && headerUserId) {
+  if (ValidateUser(headerUserToken && headerUserId)) {
     const patientId = req.body.patientId;
     const patient = await Patient.findById(patientId);
     const user = await User.findById(headerUserId);
@@ -228,7 +229,7 @@ const postComment = async (req, res) => {
 const getComments = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if (headerUserToken && headerUserId) {
+  if (ValidateUser(headerUserToken && headerUserId)) {
     try {
       const patientId = req.params.PatientId;
       const patient = await Patient.findById(patientId);
@@ -239,6 +240,8 @@ const getComments = async (req, res) => {
       res.status(403).send(output);
     }
   } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    res.status(403).send(output);
   }
 };
 

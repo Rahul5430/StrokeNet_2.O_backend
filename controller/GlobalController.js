@@ -1,6 +1,9 @@
 const Page = require("../models/PageCollection");
 const Centers = require("../models/CentersCollection");
+const User = require("../models/UserCollection");
 const Hubs = require("../models/HubsCollection");
+const { ValidateUser } = require("./authController");
+const { sendNotification, sendemail } = require("./BaseController");
 
 const getCenters = async (req, res) => {
   // const centers = [
@@ -214,10 +217,30 @@ const uploadFile = async (req, res) => {
   res.status(200).json(fileName);
 };
 
+const contactUs = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+
+  if (await ValidateUser(headerUserId, headerUserToken)) {
+    const admin = await User.find({ admin: true });
+    const data = req.body;
+    if (admin[0] && admin[0].fcm_userid && admin[0].fcm_userid != "") {
+      sendNotification(admin[0].fcm_userid, "contactUs", data);
+      sendemail("nitinmittal778@gmail.com",data.message);
+    }
+    const output = { data: { message: "request_sent" } };
+    return res.status(200).json(output);
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(403).json(output);
+  }
+};
+
 module.exports = {
   getCenters,
   getHubs,
   globalSettings,
   getSinglePage,
   uploadFile,
+  contactUs,
 };

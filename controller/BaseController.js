@@ -149,91 +149,112 @@ const connectToSocket = (server) => {
 };
 
 const sendNotification = (registrationToken, reason, data = {}) => {
-  let message;
-  if (reason == "LoggedIn") {
-    message = {
-      notification: {
-        title: "Congratulations",
-        body: "You Logged In",
-      },
-      android: {
+  console.log(data);
+  try {
+    let message;
+    if (reason == "LoggedIn") {
+      message = {
         notification: {
-          title: "Notification For Andorid",
-          body: "You Logged In StrokeNet",
-          sound: "codestrokeactivated.mp3",
-          // imageUrl:"https://strokenet.onrender.com/files/1698494179874-1000072138.jpg"
+          title: "Congratulations",
+          body: "You Logged In",
         },
-      },
-      token: registrationToken,
-    };
-    // console.log(message);
-  } else if (reason == "codeStrokeAlert") {
-    const getCenterInfo = data.getCenterInfo;
-    const getUserCenterId = data.getUserCenterId;
-    message = {
-      notification: {
-        title: "Code Stroke",
-        body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
-      },
-      android: {
+        android: {
+          notification: {
+            title: "Notification For Andorid",
+            body: "You Logged In StrokeNet",
+            sound: "codestrokeactivated.mp3",
+            // imageUrl:"https://strokenet.onrender.com/files/1698494179874-1000072138.jpg"
+          },
+        },
+        token: registrationToken,
+      };
+      // console.log(message);
+    } else if (reason == "contactUs") {
+      console.log(registrationToken);
+      message = {
+        notification: {
+          title: `You recieved message from ${data.name}`,
+          body: data.message,
+        },
+        // android: {
+        //   notification: {
+        //     title: "Notification For Andorid",
+        //     body: "You Logged In StrokeNet",
+        //   },
+        // },
+        token: registrationToken,
+      };
+      console.log(data);
+    } else if (reason == "codeStrokeAlert") {
+      const getCenterInfo = data.getCenterInfo;
+      const getUserCenterId = data.getUserCenterId;
+      message = {
         notification: {
           title: "Code Stroke",
           body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
-          sound: "codestrokeactivated.mp3",
         },
-      },
-      data: {
-        redirect: "patient-details",
-        patientId: data.patientId,
-      },
-      token: registrationToken,
-    };
-  } else if (reason == "userAdded") {
-    // console.log(data);
-    message = {
-      notification: {
-        title: "New User added",
-        body: `Name - ${data.name} and Phone number - ${data.phone_number} `,
-      },
-      android: {
+        android: {
+          notification: {
+            title: "Code Stroke",
+            body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+            sound: "codestrokeactivated.mp3",
+          },
+        },
+        data: {
+          redirect: "patient-details",
+          patientId: data.patientId,
+        },
+        token: registrationToken,
+      };
+    } else if (reason == "userAdded") {
+      // console.log(data);
+      message = {
         notification: {
           title: "New User added",
-          body: `Name - ${data.name} and Phone number - ${data.phone_number}`,
-          sound: "codestrokeactivated.mp3",
+          body: `Name - ${data.name} and Phone number - ${data.phone_number} `,
         },
-      },
-      data: {
-        redirect: "manage-users",
-      },
-      token: registrationToken,
-    };
-    // console.log(message);
-  } else {
-    // console.log(data);
-    message = {
-      notification: {
-        title: data.name,
-        body: data.message.message,
-      },
-      data: {
-        redirect: "chat",
-        fullname: data.name,
-        userId: data.message.senderId,
-      },
-      token: registrationToken,
-    };
+        android: {
+          notification: {
+            title: "New User added",
+            body: `Name - ${data.name} and Phone number - ${data.phone_number}`,
+            sound: "codestrokeactivated.mp3",
+          },
+        },
+        data: {
+          redirect: "manage-users",
+        },
+        token: registrationToken,
+      };
+      // console.log(message);
+    } else {
+      // console.log(data);
+      message = {
+        notification: {
+          title: data.name,
+          body: data.message.message,
+        },
+        data: {
+          redirect: "chat",
+          fullname: data.name,
+          userId: data.message.senderId,
+        },
+        token: registrationToken,
+      };
+    }
+    // setTimeout(() => {
+    admin
+      .messaging()
+      .send(message)
+      .then((response) => {
+        // console.log("Successfully sent message:", response);
+      })
+      .catch((error) => {
+        console.error("Error sending message:", error);
+      });
+    // }, 2000);
+  } catch (err) {
+    console.log(err);
   }
-  // setTimeout(() => {
-  admin
-    .messaging()
-    .send(message)
-    .then((response) => {
-      // console.log("Successfully sent message:", response);
-    })
-    .catch((error) => {
-      console.error("Error sending message:", error);
-    });
-  // }, 2000);
 };
 
 const FormattedDate = (isoDateTime) => {
@@ -278,7 +299,7 @@ const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
-const sendemail = async (email, OTP) => {
+const sendemail = async (email, message) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -290,7 +311,7 @@ const sendemail = async (email, OTP) => {
     from: process.env.OWNER_EMAIL,
     to: email,
     subject: "StrokeNet",
-    text: `Your OTP/Password is ${OTP}`,
+    text: `${message}`,
   };
   var sended = await transporter.sendMail(mailOptions);
   return sended;

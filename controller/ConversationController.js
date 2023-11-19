@@ -5,11 +5,12 @@ const {
   Conversation,
   UsersConversations,
 } = require("../models/ConversationCollection");
+const { ValidateUser } = require("./authController");
 
 const fetchAllOnlineUsers = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const user = await User.findById(headerUserId);
       const getCenter = user.center_id;
@@ -67,14 +68,14 @@ const fetchAllOnlineUsers = async (req, res) => {
       console.log(err);
     }
   } else {
-    res.send(403).send({ data: { message: "Session Expired" } });
+    res.status(403).send({ data: { message: "INVALID_CREDENTIALS" } });
   }
 };
 
 const sendMessage = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const message = req.body;
     try {
       const savedMsg = await Conversation.insertMany([message]);
@@ -102,14 +103,14 @@ const sendMessage = async (req, res) => {
       res.status(403).send("Something Went Wrong");
     }
   } else {
-    res.status(403).send("Something Went Wrong");
+    res.status(403).send("INVALID_CREDENTIALS");
   }
 };
 
 const getConversation = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const otherUserId = req.body.recieverId;
     try {
       const Messages = await Conversation.find({
@@ -124,14 +125,14 @@ const getConversation = async (req, res) => {
       res.status(403).send("Something Went Wrong");
     }
   } else {
-    res.status(403).send("Something Went Wrong");
+    res.status(403).send("INVALID_CREDENTIALS");
   }
 };
 
 const UserConversation = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
-  if ((headerUserId, headerUserToken)) {
+  if (await ValidateUser(headerUserId, headerUserToken)) {
     const users = await UsersConversations.find({
       uniqueKey: { $regex: headerUserId },
     });
@@ -155,7 +156,7 @@ const UserConversation = async (req, res) => {
     }
     res.status(200).send({ data: ConvoUsers });
   } else {
-    res.status(403).send({ data: { message: "Something Went Wrong" } });
+    res.status(403).send({ data: { message: "INVALID_CREDENTIALS" } });
   }
 };
 
