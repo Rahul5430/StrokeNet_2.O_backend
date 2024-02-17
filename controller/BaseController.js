@@ -197,7 +197,7 @@ const sendNotification = (registrationToken, reason, data = {}) => {
           notification: {
             title: "Code Stroke",
             body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
-						channel_id: "codeStrokeAlert",
+            channel_id: "codeStrokeAlert",
           },
         },
         data: {
