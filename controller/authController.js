@@ -9,192 +9,232 @@ const Centers = require("../models/CentersCollection");
 const Hubs = require("../models/HubsCollection");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+const { executeQuery } = require("../config/sqlDatabase");
+const { v4: uuidv4 } = require("uuid");
 
 const signup = async (req, res) => {
   try {
     const data = req.body;
-    if (data.first_name == "") {
+    if (data.first_name === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid First Name" } });
     }
-    if (data.last_name == "") {
+    if (data.last_name === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid Last Name" } });
     }
-    if (data.email_address == "") {
+    if (data.email_address === "") {
       return res
         .status(403)
-        .json({ data: { message: "Please Enter Valid Email Addresss" } });
+        .json({ data: { message: "Please Enter Valid Email Address" } });
     }
-    // check for other email validations
 
-    //  Check here for the same email address using Data Base
-    const user = await User.findOne({ email_address: data.email_address });
-    if (user) {
+    // Check if email already exists in the database
+    const [existingUser] = await executeQuery(
+      "SELECT * FROM UserCollection WHERE email_address = ?",
+      [data.email_address]
+    );
+    if (existingUser) {
       return res
         .status(403)
-        .json({ data: { message: " Email Address already registered" } });
+        .json({ data: { message: "Email Address already registered" } });
     }
 
-    if (data.phone_number == "") {
+    if (data.phone_number === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid Phone Number" } });
     }
-    // check for other Phone Number validations
 
-    if (data.password == "") {
-      return res
-        .status(403)
-        .json({ data: { message: "Please Enter Valid Password" } });
-    }
-    // check for other Password Validations
+    // Additional validation for phone number and password can be added here
 
-    if (data.center_id == "") {
+    if (data.center_id === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid Center Id" } });
     }
-    if (data.user_department == "") {
+    if (data.user_department === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid User Department" } });
     }
-    if (data.user_role == "") {
+    if (data.user_role === "") {
       return res
         .status(403)
         .json({ data: { message: "Please Enter Valid User Role" } });
     }
 
-    // Now insert the user info in the insertUser Variable
-    const center = await Centers.findOne({ id: data.center_id });
-    const insertUser = {
-      first_name: data.first_name,
-      last_name: data.last_name,
-      fullname: data.first_name + " " + data.last_name,
-      email_address: data.email_address,
-      phone_number: data.phone_number,
-      phone_number_verified: false,
-      password: data.password,
-      center_id: center,
-      user_department: data.user_department,
-      user_role: data.user_role,
-      last_login: data.last_login,
-      online_status: data.online_status,
-      status: data.status,
-      is_hub_user: center.is_hub,
-      is_spoke_user: center.is_spoke,
-      is_center_user: center.is_center,
-    };
-    // Now adding insertUser into the dataBase
-    const saved_user = await User.insertMany([insertUser]);
-    const admin = await User.findOne({ admin: true });
-    if (admin && admin.fcm_userid != "") {
-      sendNotification(admin.fcm_userid, "userAdded", {
-        name: insertUser.fullname,
-        phone_number: insertUser.phone_number,
-      });
+    // Retrieve center information based on center_id
+    const [center] = await executeQuery(
+      "SELECT * FROM CentersCollection WHERE id = ?",
+      [data.center_id]
+    );
+    if (!center) {
+      return res.status(403).json({ data: { message: "Invalid Center Id" } });
     }
-    return res.status(200).send({
+
+    // Generate a unique ID for the user
+    const userId = uuidv4();
+
+    // Insert new user into the database
+    const insertUserQuery = `
+      INSERT INTO UserCollection (
+        id,
+        first_name,
+        last_name,
+        fullname,
+        email_address,
+        password,
+        phone_number,
+        phone_number_verified,
+        user_department,
+        user_role,
+        center_id,
+        status,
+        is_hub_user,
+        is_spoke_user,
+        is_center_user
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const insertUserData = [
+      userId,
+      data.first_name,
+      data.last_name,
+      `${data.first_name} ${data.last_name}`,
+      data.email_address,
+      data.password,
+      data.phone_number,
+      false, // Assuming phone_number_verified starts as false
+      data.user_department,
+      data.user_role,
+      data.center_id,
+      "active", // Assuming status is optional
+      !!center.is_hub, // Assuming is_hub_user, is_spoke_user, and is_center_user are optional
+      !!center.is_spoke,
+      !!center.is_center,
+    ];
+
+    await executeQuery(insertUserQuery, insertUserData);
+
+    return res.status(200).json({
       data: {
         message: "User has been Created Successfully",
-        userId: saved_user._id,
+        userId: userId,
       },
     });
-  } catch (err) {
-    console.log(err);
-    return res.status(403).send({
-      data: {
-        message: "Something Went Wrong",
-      },
-    });
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({ data: { message: "Something Went Wrong" } });
   }
 };
 
 const login = async (req, res) => {
   const data = req.body;
-  // console.log(req.body);
-  if (data.email_address == "") {
+  console.log(data);
+
+  if (!data.email_address) {
     return res
       .status(403)
-      .json({ data: { message: "Please Enter Valid Email Addresss" } });
+      .json({ data: { message: "Please Enter Valid Email Address" } });
   }
-  // check for other email validations
+  // Additional email validation logic here
 
-  if (data.password == "") {
+  if (!data.password) {
     return res
       .status(403)
       .json({ data: { message: "Please Enter Valid Password" } });
   }
-  // check for other Password Validations
+  // Additional password validation logic here
 
-  const user_email = data.email_address;
-  const password = data.password;
+  try {
+    const [user] = await executeQuery(
+      "SELECT * FROM UserCollection WHERE email_address = ?",
+      [data.email_address]
+    );
+    if (!user) {
+      return res
+        .status(403)
+        .json({ data: { message: "Invalid Login Credentials" } });
+    }
 
-  // Check in the dataBase if email_address exist and then check for that user if password matches
-  //  And then store the User.
-  const user = await User.findOne({ email_address: user_email });
-  if (user && user.password == password) {
-    if (!user.phone_number_verified)
-      return res.status(403).send({
-        data: {
-          message:
-            "Your account is pending verification. Once its approved, you will be able to access your account.",
-        },
-      });
+    const passwordIsValid = data.password == user.password;
+    if (!passwordIsValid) {
+      return res
+        .status(403)
+        .json({ data: { message: "Invalid Login Credentials" } });
+    }
 
-    // Payload data (the data you want to include in the token)
-    const payload = {
-      userId: user._id,
-    };
-    const refreshtoken = jwt.sign(
+    if (!user.phone_number_verified) {
+      return res
+        .status(403)
+        .json({
+          data: {
+            message:
+              "Your account is pending for verification. Once it's approved, you will be able to access your account.",
+          },
+        });
+    }
+
+    // Generate tokens
+    const payload = { userId: user.id }; // Adjust based on your user id field
+    const refreshToken = jwt.sign(
       payload,
       process.env.REFRESH_TOKEN_SECRET_KEY,
       { expiresIn: "1d" }
     );
     const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET_KEY, {
-      expiresIn: "1h",
+      expiresIn: "1d",
     });
-    user.token = refreshtoken;
-    if (data.fcm_userid != "") {
-      user.fcm_userid = data.fcm_userid;
+
+    // Update user's FCM UserID and last login, if needed
+    if (data.fcm_userid) {
+      await executeQuery(
+        "UPDATE UserCollection SET fcm_userid = ?,token=?, last_login = NOW() WHERE id = ?",
+        [data.fcm_userid, refreshToken, user.id]
+      );
     }
-    user.last_login = Date.now();
-    await user.save();
-    res.cookie("refreshToken", refreshtoken, { httpOnly: true });
-    return res.status(200).json({ data: user });
+    res.cookie("refreshToken", refreshToken, { httpOnly: true });
+    return res.status(200).json({ data: { ...user, token: refreshToken } }); // Be cautious about what user information you send back!
+  } catch (error) {
+    console.error("Login Error:", error);
+    return res.status(500).json({ data: { message: "Something went wrong" } });
   }
-  //  Do further checkings and then return the reqired information
-  res.status(403).json({ data: { message: "Invalid Login Credentials" } });
 };
 
 const forgotPassword = async (req, res) => {
   try {
     const email_address = req.body.email_address;
     if (validateEmail(email_address)) {
-      const user = await User.findOne({ email_address: email_address });
+      const user = await executeQuery(
+        "SELECT * FROM UserCollection WHERE email_address = ?",
+        [email_address]
+      );
       console.log(user);
-      if (user) {
+      if (user.length > 0) {
         const otpCode = otpGenerator.generate(6, {
           specialChars: false,
         });
-        user.password = otpCode;
-        await user.save();
+        await executeQuery(
+          "UPDATE UserCollection SET password = ? WHERE email_address = ?",
+          [otpCode, email_address]
+        );
         sendemail(email_address, otpCode);
-        res.status(200).send({ data: { message: "OTP Sent to Email" } });
+        return res.status(200).send({ data: { message: "OTP Sent to Email" } });
       } else {
         return res
           .status(403)
           .send({ data: { message: "Email Address Is Not Registered" } });
       }
     } else {
-      res.status(403).send({ data: { message: "Invalid Email" } });
+      return res.status(403).send({ data: { message: "Invalid Email" } });
     }
   } catch (err) {
-    console.log(err);
-    res.status(403).json({ data: { message: "Unable To Send Password" } });
+    console.error(err);
+    return res
+      .status(403)
+      .json({ data: { message: "Unable To Send Password" } });
   }
 };
 
@@ -202,27 +242,46 @@ const validateUser = async (req, res) => {
   const userId = req.headers.userid;
   const userToken = req.headers.usertoken;
   try {
+    // Verify the user token
     const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
-    const userData = await User.findById(userId);
-    if (decoded.userId == userId && userData) {
+
+    // Retrieve user data from the database based on userId
+    const [userData] = await executeQuery(
+      "SELECT * FROM UserCollection WHERE id = ?",
+      [userId]
+    );
+
+    // Check if the decoded userId matches the provided userId and user data exists
+    if (decoded.userId === userId && userData) {
       return res.json({ status: true, userData: userData });
     }
+
     res.json({ status: false });
   } catch (err) {
+    console.log(err);
     res.json({ status: false });
   }
 };
 
 const ValidateUser = async (userId, userToken) => {
   try {
+    // Verify the user token
     const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
-    const userData = await User.findById(userId);
-    if (decoded.userId == userId && userData) {
-      return true;
+
+    // Retrieve user data from the database based on userId
+    const [userData] = await executeQuery(
+      "SELECT * FROM UserCollection WHERE id = ?",
+      [userId]
+    );
+
+    // Check if the decoded userId matches the provided userId and user data exists
+    if (decoded.userId === userId && userData) {
+      return true; // User is valid
     }
-    return false;
+
+    return false; // User is not valid
   } catch (err) {
-    return false;
+    return false; // Error occurred, user is not valid
   }
 };
 
@@ -233,17 +292,34 @@ const updateProfile = async (req, res) => {
   if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const data = req.body;
-      const user = await User.findById(headerUserId);
-      if (user) {
-        user.first_name = data.first_name;
-        user.last_name = data.last_name;
-        user.email_address = data.email_address;
-        user.phone_number = data.phone_number;
-        const updatedUser = await user.save();
-        res.status(200).json({ data: updatedUser });
+      const user = await executeQuery(
+        "SELECT * FROM UserCollection WHERE id = ?",
+        [headerUserId]
+      );
+      if (user.length > 0) {
+        const updateUserQuery = `
+          UPDATE UserCollection 
+          SET first_name = ?, last_name = ?, email_address = ?, phone_number = ?
+          WHERE id = ?
+        `;
+        await executeQuery(updateUserQuery, [
+          data.first_name,
+          data.last_name,
+          data.email_address,
+          data.phone_number,
+          headerUserId,
+        ]);
+        const updatedUser = await executeQuery(
+          "SELECT * FROM UserCollection WHERE id = ?",
+          [headerUserId]
+        );
+        return res.status(200).json({ data: updatedUser });
+      } else {
+        const output = { data: { message: "User not found" } };
+        return res.status(403).json(output);
       }
     } catch (err) {
-      console.log(err);
+      console.error(err);
       const output = { data: { message: "Something Went Wrong" } };
       return res.status(403).json(output);
     }
@@ -260,29 +336,45 @@ const changePassword = async (req, res) => {
   if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const data = req.body;
-      const user = await User.findById(headerUserId);
-      const errors = [];
-      if (data.new_password == null) {
-        errors.push("Invalid New Password");
-      } else if (data.repeat_password != data.new_password) {
-        errors.push("New Password && Repeat Password Didn't Match");
-      } else if (data.old_password != user.password) {
-        errors.push("Old Password Didn't Match");
-      }
-      if (errors.length > 0) {
-        const output = { data: { message: errors[0] } };
-        return res.status(403).json(output);
-      }
-      if (data.old_password == user.password) {
-        user.password=data.new_password;
-        await user.save();
-        res.status(200).json({ data: "Password Changed" });
+      const user = await executeQuery(
+        "SELECT * FROM UserCollection WHERE id = ?",
+        [headerUserId]
+      );
+      if (user.length > 0) {
+        const oldPassword = user[0].password;
+        const errors = [];
+        if (!data.new_password) {
+          errors.push("Invalid New Password");
+        } else if (data.repeat_password !== data.new_password) {
+          errors.push("New Password and Repeat Password Didn't Match");
+        } else if (data.old_password !== oldPassword) {
+          errors.push("Old Password Didn't Match");
+        }
+        if (errors.length > 0) {
+          const output = { data: { message: errors[0] } };
+          return res.status(403).json(output);
+        }
+        if (data.old_password === oldPassword) {
+          const updatePasswordQuery = `
+            UPDATE UserCollection
+            SET password = ?
+            WHERE id = ?
+          `;
+          await executeQuery(updatePasswordQuery, [
+            data.new_password,
+            headerUserId,
+          ]);
+          return res.status(200).json({ data: "Password Changed" });
+        } else {
+          const output = { data: { message: "Old Password Didn't Match" } };
+          return res.status(403).json(output);
+        }
       } else {
-        const output = { data: { message: "Old Password Didn't Match" } };
+        const output = { data: { message: "User not found" } };
         return res.status(403).json(output);
       }
     } catch (err) {
-      console.log(err);
+      console.error(err);
       const output = { data: { message: "Something Went Wrong" } };
       return res.status(403).json(output);
     }

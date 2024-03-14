@@ -3,6 +3,7 @@ const serviceAccount = require("../google-secrets.json");
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
 const socketIo = require("socket.io");
+const {executeQuery} = require("../config/sqlDatabase");
 const {
   Conversation,
   UsersConversations,
@@ -118,29 +119,32 @@ const connectToSocket = (server) => {
     });
 
     socket.on("sendMessage", async (data) => {
+      console.log(data);
       const message = data.message;
       io.to(message.recieverId).emit("message", message);
       const number = io.sockets.adapter.rooms.get(message.recieverId);
       const num = number ? number.size : 0;
       // console.log(num);
       if (num == 0) {
-        const user = await User.findById(message.recieverId);
-        if (user && user.fcm_userid) {
-          sendNotification(user.fcm_userid, "chat", data);
+        const getUserQuery = `
+        SELECT
+          *
+        FROM UserCollection u
+        WHERE u.id = ?
+      `;
+        const getUserData = [message.recieverId];
+        const user = await executeQuery(getUserQuery, getUserData);
+        if (user && user[0] && user[0].fcm_userid) {
+          sendNotification(user[0].fcm_userid, "chat", data);
         }
       } else {
-        await Conversation.updateMany(
-          {
-            senderId: message.senderId,
-            recieverId: message.recieverId,
-            read_by_user: false,
-          },
-          {
-            $set: {
-              read_by_user: true,
-            },
-          }
-        );
+        const updateMessagesQuery = `
+        UPDATE Conversation
+        SET read_by_user = true
+        WHERE senderId = ? AND recieverId = ? AND read_by_user = false
+      `;
+        const updateMessagesData = [message.senderId, message.recieverId];
+        await executeQuery(updateMessagesQuery, updateMessagesData);
         io.to(message.senderId).emit("messageSeen");
       }
       io.to(message.senderId).emit("sent");

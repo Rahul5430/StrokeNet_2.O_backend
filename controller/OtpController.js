@@ -1,51 +1,58 @@
 const { OtpEmail, OtpPhone } = require("../models/OtpCollection");
 const { sendemail } = require("./BaseController");
 const User = require("../models/UserCollection");
-const bcrypt = require("bcrypt");
 const otpGenerator = require("otp-generator");
 require("dotenv").config();
+const {executeQuery} = require("../config/sqlDatabase");
 
 const sendEmailCode = async (req, res) => {
   const email_address = req.body.email_address;
-  const user = await User.findOne({ email_address: email_address });
-  if (user) {
-    const output = { data: { message: "Email Address Already Registered" } };
-    return res.status(403).json(output);
-  }
-  await OtpEmail.deleteMany({
-    emailAddress: email_address,
-  });
-  const otpCode = otpGenerator.generate(6, {
-    specialChars: false,
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-  });
-  sendemail(email_address, otpCode)
-    .then(async (info) => {
-      const SavedOtp = await OtpEmail.insertMany([
-        {
-          emailAddress: email_address,
-          otpCode: otpCode,
-        },
-      ]);
-      if (SavedOtp) {
+  const findUserQuery = `SELECT * FROM UserCollection WHERE email_address = ?`;
+
+  try {
+    const userData = await executeQuery(findUserQuery, [email_address]);
+
+    if (userData.length > 0) {
+      const output = { data: { message: "Email Address Already Registered" } };
+      return res.status(403).json(output);
+    }
+
+    // Delete existing OTP records for the email address
+    const deleteOtpQuery = `DELETE FROM OtpEmailCollections WHERE emailAddress = ?`;
+    await executeQuery(deleteOtpQuery, [email_address]);
+
+    // Generate OTP code
+    const otpCode = otpGenerator.generate(6, {
+      specialChars: false,
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+    });
+
+    // Insert new OTP record
+    const insertOtpQuery = `INSERT INTO OtpEmailCollections (emailAddress, otpCode) VALUES (?, ?)`;
+    await executeQuery(insertOtpQuery, [email_address, otpCode]);
+
+    // Send email with OTP code
+    sendemail(email_address, otpCode)
+      .then((info) => {
         const output = { data: { message: "email_sent" } };
         res.status(200).json(output);
-      } else {
+      })
+      .catch((err) => {
+        console.log(err);
         const output = { data: { message: "Unable To send Otp" } };
         res.status(403).json(output);
-      }
-    })
-    .catch((err) => {
-      console.log(err);
-      const output = { data: { message: "Unable To send Otp" } };
-      res.status(403).json(output);
-    });
+      });
+  } catch (error) {
+    console.log(error);
+    const output = { data: { message: "Error sending email. Please try again later." } };
+    res.status(500).json(output);
+  }
 };
+
 
 const verifyEmailOtp = async (req, res) => {
   const data = req.body;
-  // console.log(data);
   const errors = [];
 
   if (!data.email_address || data.email_address === "") {
@@ -53,93 +60,116 @@ const verifyEmailOtp = async (req, res) => {
   } else if (!data.otp_code || data.otp_code === "") {
     errors.push("OTP is required");
   }
-  // if (!data.message_api_code || data.message_api_code === "") {
-  //   errors.push("Message code is required");
-  // }
+
   if (errors.length > 0) {
     const output = { data: { message: errors[0] } };
     res.status(400).json(output);
   } else {
-    const EmailOtpCode = await OtpEmail.findOne({
-      emailAddress: data.email_address,
-    });
-    if (EmailOtpCode && EmailOtpCode.otpCode == data.otp_code) {
+    // Find OTP code for the provided email address
+    const findOtpQuery = `SELECT * FROM OtpEmailCollections WHERE emailAddress = ?`;
+
+    try {
+      const otpData = await executeQuery(findOtpQuery, [data.email_address]);
+
+      if (otpData.length > 0 && otpData[0].otpCode === data.otp_code) {
+        // If OTP matches, delete OTP record and send success response
+        const deleteOtpQuery = `DELETE FROM OtpEmailCollections WHERE emailAddress = ?`;
+        await executeQuery(deleteOtpQuery, [data.email_address]);
+
+        const output = {
+          data: {
+            message: "Email verified",
+          },
+        };
+        res.status(200).json(output);
+      } else {
+        // If OTP is invalid, send error response
+        const output = {
+          data: {
+            message: "Invalid OTP. Please try again.",
+          },
+        };
+        res.status(400).json(output);
+      }
+    } catch (error) {
+      console.log(error);
       const output = {
         data: {
-          message: "Email verified",
+          message: "Error verifying OTP. Please try again later.",
         },
       };
-      await OtpEmail.deleteOne({
-        emailAddress: data.email_address,
-      });
-      res.status(200).json(output);
-    } else {
-      const output = {
-        data: {
-          message: "Invalid OTP. Please try again.",
-        },
-      };
-      res.status(400).json(output);
+      res.status(500).json(output);
     }
   }
 };
 
 const sendOTPCode = async (req, res) => {
   const phone_number = req.body.phone_number;
-  const user = await User.findOne({ phone_number: phone_number });
-  if (req.body.reason != "signup" && req.body.reason != "login") {
+  
+  // Check if the reason is valid
+  if (req.body.reason !== "signup" && req.body.reason !== "login") {
     const output = { data: { message: "Invalid Reason" } };
     return res.status(403).json(output);
-  } else if (user && req.body.reason == "signup") {
-    const output = { data: { message: "Phone Number Already Registered" } };
-    return res.status(403).json(output);
-  } else if (!user && req.body.reason == "login") {
-    const output = { data: { message: "Phone Number Not Registered" } };
-    return res.status(403).json(output);
   }
-  const client = require("twilio")(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-  );
-  const otpCode = otpGenerator.generate(6, {
-    specialChars: false,
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-  });
-  client.messages
-    .create({
-      from: "+19376750028",
-      body:
-        "Your StrokeNet Verification OTP is " +
-        otpCode +
-        "\nIts valid For Only 1 minute",
-      to: "+91" + phone_number,
-    })
-    .then(
-      async (message) => {
-        await OtpPhone.deleteMany({
-          phoneNumber: phone_number,
-        });
-        const SavedOtp = await OtpPhone.insertMany([
-          {
-            phoneNumber: phone_number,
-            otpCode: otpCode,
-          },
-        ]);
-        if (SavedOtp) {
+
+  // Find user by phone number
+  const findUserQuery = `SELECT * FROM UserCollection WHERE phone_number = ?`;
+  try {
+    const userData = await executeQuery(findUserQuery, [phone_number]);
+
+    if (userData.length > 0) {
+      // If user exists and reason is signup, return phone number already registered error
+      if (req.body.reason === "signup") {
+        const output = { data: { message: "Phone Number Already Registered" } };
+        return res.status(403).json(output);
+      }
+    } else {
+      // If user doesn't exist and reason is login, return phone number not registered error
+      if (req.body.reason === "login") {
+        const output = { data: { message: "Phone Number Not Registered" } };
+        return res.status(403).json(output);
+      }
+    }
+
+    // Send OTP via Twilio
+    const otpCode = otpGenerator.generate(6, {
+      specialChars: false,
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+    });
+    // const twilio = require("twilio")(
+    //   process.env.TWILIO_ACCOUNT_SID,
+    //   process.env.TWILIO_AUTH_TOKEN
+    // );
+    // twilio.messages
+    //   .create({
+    //     from: "+19376750028",
+    //     body: "Your StrokeNet Verification OTP is " + otpCode + "\nIts valid For Only 1 minute",
+    //     to: "+91" + phone_number,
+    //   })
+    //   .then(
+    //     async (message) => {
+    //       // If message sent successfully, delete existing OTP records and save new OTP
+    //       const deleteOtpQuery = `DELETE FROM OtpPhoneCollections WHERE phoneNumber = ?`;
+    //       await executeQuery(deleteOtpQuery, [phone_number]);
+
+          const saveOtpQuery = `INSERT INTO OtpPhoneCollections (phoneNumber, otpCode) VALUES (?, ?)`;
+          await executeQuery(saveOtpQuery, [phone_number, otpCode]);
+
           const output = { data: { message: "sms_sent" } };
           res.status(200).json(output);
-        } else {
-          const output = { data: { message: "Unable To send Otp" } };
-          res.status(403).json(output);
-        }
-      },
-      (err) => {
-        console.log(err);
-        const output = { data: { message: "Unable To send Otp" } };
-        res.status(403).json(output);
-      }
-    );
+      //   },
+      //   (err) => {
+      //     console.log(err);
+      //     const output = { data: { message: "Unable To send Otp" } };
+      //     res.status(403).json(output);
+      //   }
+      // );
+  } catch (error) {
+    console.log(error);
+    const output = { data: { message: "Error sending OTP. Please try again later." } };
+    res.status(500).json(output);
+  }
 };
 
 const verifyOTP = async (req, res) => {
@@ -152,49 +182,50 @@ const verifyOTP = async (req, res) => {
     errors.push("OTP is required");
   }
 
-  // if (!data.message_api_code || data.message_api_code === "") {
-  //   errors.push("Message code is required");
-  // }
   if (errors.length > 0) {
     const output = { data: { message: errors[0] } };
     res.status(400).json(output);
   } else {
-    const otpCode = await OtpPhone.findOne({ phoneNumber: data.phone_number });
-    if (otpCode && otpCode.otpCode == data.otp_code) {
-      await OtpPhone.deleteOne({
-        phoneNumber: data.phone_number,
-      });
-      if (data.reason == "login") {
-        const user = await User.findOne({ phone_number: data.phone_number });
-        if (!user) {
-          const output = {
-            data: {
-              message: "User Not Exists",
-            },
-          };
-          return res.status(400).json(output);
+    // Find OTP code by phone number
+    const findOtpQuery = `SELECT * FROM OtpPhoneCollections WHERE phoneNumber = ?`;
+    try {
+      const otpData = await executeQuery(findOtpQuery, [data.phone_number]);
+
+      if (otpData.length > 0 && otpData[0].otpCode == data.otp_code) {
+        // If OTP is valid, delete OTP record
+        const deleteOtpQuery = `DELETE FROM OtpPhoneCollections WHERE phoneNumber = ?`;
+        await executeQuery(deleteOtpQuery, [data.phone_number]);
+
+        if (data.reason === "login") {
+          // If reason is login, check if user exists
+          const findUserQuery = `SELECT * FROM UsersCollection WHERE phone_number = ?`;
+          const userData = await executeQuery(findUserQuery, [data.phone_number]);
+
+          if (userData.length === 0) {
+            const output = { data: { message: "User Not Exists" } };
+            return res.status(400).json(output);
+          }
+
+          // Update FCM user ID if provided
+          if (data.fcm_userid && data.fcm_userid !== "") {
+            const updateFcmQuery = `UPDATE UsersCollection SET fcm_userid = ? WHERE phone_number = ?`;
+            await executeQuery(updateFcmQuery, [data.fcm_userid, data.phone_number]);
+          }
+
+          const output = userData[0];
+          res.status(200).json(output);
+        } else {
+          const output = { data: { message: "OTP verified" } };
+          res.status(200).json(output);
         }
-        if (data.fcm_userid && data.fcm_userid != "") {
-          user.fcm_userid = data.fcm_userid;
-          await user.save();
-        }
-        output = user;
-        res.status(200).json(output);
       } else {
-        output = {
-          data: {
-            message: "OTP verified",
-          },
-        };
-        res.status(200).json(output);
+        const output = { data: { message: "Invalid OTP. Please try again." } };
+        res.status(400).json(output);
       }
-    } else {
-      const output = {
-        data: {
-          message: "Invalid OTP. Please try again.",
-        },
-      };
-      res.status(400).json(output);
+    } catch (error) {
+      console.log(error);
+      const output = { data: { message: "Error verifying OTP. Please try again later." } };
+      res.status(500).json(output);
     }
   }
 };

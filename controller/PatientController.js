@@ -6,6 +6,8 @@ const { calculateAge, sendNotification } = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
 const { ValidateUser } = require("./authController");
+const { v4: uuidv4 } = require("uuid");
+const { executeQuery } = require("../config/sqlDatabase");
 
 const addPatient = async (req, res) => {
   try {
@@ -15,6 +17,15 @@ const addPatient = async (req, res) => {
     // Validate user (you can implement your user validation logic here)
     if (await ValidateUser(headerUserId, headerUserToken)) {
       const data = req.body;
+
+      // const user = await UserCollection.findById(headerUserId);
+
+      // if (user.fcm_userid) {
+      //   sendNotification(user.fcm_userid, "codeStrokeAlert", {
+      //     getCenterInfo: "",
+      //     getUserCenterId: "",
+      //   });
+      // }
 
       const errors = [];
 
@@ -26,11 +37,18 @@ const addPatient = async (req, res) => {
         errors.push("Weakness side is required");
       }
 
+      const inputDateString = data.datetime_of_stroke;
+      const dateObject = new Date(inputDateString);
+      const sqlFormattedDate = dateObject
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
+      data.datetime_of_stroke = sqlFormattedDate;
       if (errors.length > 0) {
         return res.status(403).json({ data: { message: errors[0] } });
       } else {
         const patientData = data;
-        patientData.patient_basic_details = {};
+        // patientData.patient_basic_details = {};
 
         if (data.first_name) {
           patientData.first_name = data.first_name;
@@ -42,20 +60,22 @@ const addPatient = async (req, res) => {
           patientData.name = `${data.first_name} ${data.last_name}`;
         }
 
+        patientData.age = data.age | null;
+
         if (data.name) {
           const explodeName = data.name.split(" ");
 
           if (explodeName[0]) {
             patientData.first_name = explodeName[0];
-            patientData.patient_basic_details.first_name = explodeName[0];
+            // patientData.patient_basic_details.first_name = explodeName[0];
           }
 
-          if (explodeName[1]) {
-            patientData.last_name = explodeName[1];
-            patientData.patient_basic_details.last_name = explodeName[1];
-          }
+          // if (explodeName[1]) {
+          patientData.last_name = explodeName ? explodeName[1] ?? null : null;
+          // patientData.patient_basic_details.last_name = explodeName[1];
+          // }
 
-          patientData.name = data.name;
+          patientData.name = data.name || null;
         }
         // if (data.date_of_birth) {
         //   patientData.date_of_birth = data.date_of_birth;
@@ -74,31 +94,42 @@ const addPatient = async (req, res) => {
         // }
 
         if (data.gender) {
-          patientData.gender = data.gender;
-          patientData.patient_basic_details.gender = data.gender;
+          patientData.gender = data.gender || null;
+          // patientData.patient_basic_details.gender = data.gender;
         }
+
+        patientData.nihss_admission = data.nihss_admission || null;
 
         if (data.weakness_side) {
           patientData.weakness_side = data.weakness_side;
-          patientData.patient_basic_details.weakness_side = data.weakness_side;
+          // patientData.patient_basic_details.weakness_side = data.weakness_side;
         }
 
-        const user = await User.findById(headerUserId);
-        patientData.user_data = {
-          user_id: user._id,
-          fullname: user.fullname,
-          phone_number: user.phone_number,
-        };
+        const userQuery = `SELECT * FROM userCollection WHERE id = ?`;
+        const userResult = await executeQuery(userQuery, [headerUserId]);
+
+        // Assuming executeQuery returns the user data as an array
+        const user = userResult[0];
+
+        // console.log(user);
+
+        // patientData.user_data = {
+        //   user_id: user.id,
+        //   fullname: user.fullname,
+        //   phone_number: user.phone_number,
+        // };
+
+        patientData.created_by = headerUserId;
 
         if (data.contact_number) {
           patientData.contact_number = data.contact_number;
-          patientData.patient_basic_details.contact_number =
-            data.contact_number;
+          // patientData.patient_basic_details.contact_number =
+          //   data.contact_number;
         }
 
         if (data.address) {
           patientData.address = data.address;
-          patientData.patient_basic_details.address = data.address;
+          // patientData.patient_basic_details.address = data.address;
         }
 
         if (data.covid_score) {
@@ -109,8 +140,8 @@ const addPatient = async (req, res) => {
           patientData.covid_values = data.covid_values;
         }
 
-        patientData.last_updated = Date.now();
-        patientData.created = Date.now();
+        patientData.last_updated = sqlFormattedDate;
+        patientData.created = sqlFormattedDate;
 
         const center_id = user.center_id;
         patientData.center_id = center_id;
@@ -118,10 +149,55 @@ const addPatient = async (req, res) => {
         // patientData.datetime_of_stroke = formatDate(data.datetime_of_stroke);
 
         // More data assignments...
-        const savedPatient = await Patient.insertMany([patientData]);
-        return res.status(200).json({ data: savedPatient[0] });
+        delete patientData.nihss_admission;
+        console.log(patientData);
+        const addPatientQuery = `
+        INSERT INTO patients (
+          datetime_of_stroke,
+          covid_score,
+          covid_values,
+          name,
+          weakness_side,
+          age,
+          ${data.gender ? "gender," : ""}
+          first_name,
+          last_name,
+          created_by,
+          last_updated,
+          created,
+          center_id
+        ) VALUES (
+          ?,?,?,?,?,?,
+          ${data.gender ? "?, " : ""}?,?,?,?,?,?,?
+        )
+      `;
+
+        console.log(addPatientQuery);
+
+        await executeQuery(addPatientQuery, Object.values(patientData));
+
+        const lastInsertedIdQuery = `SELECT LAST_INSERT_ID() as lastInsertId`;
+        const lastInsertedIdResult = await executeQuery(lastInsertedIdQuery);
+
+        // Extract the last inserted id
+        const lastInsertedId = lastInsertedIdResult[0].lastInsertId;
+
+        // Query the patients table again to fetch the inserted record
+        const getPatientQuery = `SELECT * FROM patients WHERE id = ?`;
+        const insertedPatientResult = await executeQuery(getPatientQuery, [
+          lastInsertedId,
+        ]);
+
+        // Extract the inserted patient object
+        const insertedPatient = insertedPatientResult[0];
+
+        // console.log(insertedPatient);
+
+        // const savedPatient = await Patient.insertMany([patientData]);
+        return res.status(200).json({ data: insertedPatient });
       }
     } else {
+      console.log("invalid cred");
       return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
     }
   } catch (error) {

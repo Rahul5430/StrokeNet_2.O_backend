@@ -5,7 +5,7 @@ const connectDb = require("./config/mongoose");
 const mongoose = require("mongoose");
 const http = require("http");
 const app = express();
-const {connectToSocket} = require("./controller/BaseController"); 
+const { connectToSocket } = require("./controller/BaseController");
 require("dotenv").config();
 
 const server = http.createServer(app);

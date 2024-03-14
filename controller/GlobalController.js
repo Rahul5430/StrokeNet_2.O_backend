@@ -4,6 +4,7 @@ const User = require("../models/UserCollection");
 const Hubs = require("../models/HubsCollection");
 const { ValidateUser } = require("./authController");
 const { sendNotification, sendemail } = require("./BaseController");
+const {executeQuery} = require("../config/sqlDatabase");
 
 const getCenters = async (req, res) => {
   // const centers = [
@@ -208,8 +209,32 @@ const globalSettings = (req, res) => {
 
 const getSinglePage = async (req, res) => {
   const pageId = req.params.pageId;
-  const PageContent = await Page.findOne({ id: pageId });
-  res.status(200).send({ data: PageContent });
+
+  // SQL query to retrieve data from the Page table
+  const getPageQuery = `
+    SELECT id, page_title, page_content, status, created
+    FROM Page
+    WHERE id = ?;
+  `;
+
+  try {
+    // Execute the SQL query with the pageId parameter
+    const pageResult = await executeQuery(getPageQuery, [pageId]);
+
+    // Check if a page with the given id was found
+    if (pageResult.length === 0) {
+      return res.status(404).send({ message: "Page not found" });
+    }
+
+    // Extract the first (and only) row from the query result
+    const pageData = pageResult[0];
+
+    // Send the page data in the response
+    res.status(200).send({ data: pageData });
+  } catch (error) {
+    console.error("Error retrieving page:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
 };
 
 const uploadFile = async (req, res) => {
@@ -226,7 +251,7 @@ const contactUs = async (req, res) => {
     const data = req.body;
     if (admin[0] && admin[0].fcm_userid && admin[0].fcm_userid != "") {
       sendNotification(admin[0].fcm_userid, "contactUs", data);
-      sendemail("nitinmittal778@gmail.com",data.message);
+      sendemail("nitinmittal778@gmail.com", data.message);
     }
     const output = { data: { message: "request_sent" } };
     return res.status(200).json(output);
