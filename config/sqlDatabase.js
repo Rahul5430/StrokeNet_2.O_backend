@@ -6,7 +6,7 @@ const pool = mysql.createPool({
   host: "localhost",
   user: "root",
   password: "nitin@123",
-  database: "strokenet",
+  database: "strokenet_test",
 });
 
 async function executeQuery(sql, values) {

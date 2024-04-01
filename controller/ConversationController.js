@@ -11,6 +11,7 @@ const { executeQuery } = require("../config/sqlDatabase");
 const fetchAllOnlineUsers = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
+  console.log(req.headers);
   if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
       const user = await executeQuery(

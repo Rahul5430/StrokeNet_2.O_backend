@@ -191,22 +191,22 @@ const sendNotification = (registrationToken, reason, data = {}) => {
       console.log(data);
     } else if (reason == "codeStrokeAlert") {
       const getCenterInfo = data.getCenterInfo;
-      const getUserCenterId = data.getUserCenterId;
+      console.log(data);
       message = {
         notification: {
           title: "Code Stroke",
-          body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+          body: `Acute Stroke in ${getCenterInfo.center_name}`,
         },
         android: {
           notification: {
             title: "Code Stroke",
-            body: `Acute Stroke in ${getCenterInfo.center_name} (${getUserCenterId.user_role})`,
+            body: `Acute Stroke in ${getCenterInfo.center_name}`,
             channel_id: "codeStrokeAlert",
           },
         },
         data: {
           redirect: "patient-details",
-          patientId: data.patientId,
+          patientId: (data.patientId).toString(),
         },
         token: registrationToken,
       };

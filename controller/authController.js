@@ -132,7 +132,7 @@ const signup = async (req, res) => {
 
 const login = async (req, res) => {
   const data = req.body;
-  console.log(data);
+  console.log('hello',data);
 
   if (!data.email_address) {
     return res
@@ -239,6 +239,7 @@ const forgotPassword = async (req, res) => {
 };
 
 const validateUser = async (req, res) => {
+  console.log("hello");
   const userId = req.headers.userid;
   const userToken = req.headers.usertoken;
   try {
@@ -264,6 +265,7 @@ const validateUser = async (req, res) => {
 };
 
 const ValidateUser = async (userId, userToken) => {
+  console.log("hello");
   try {
     // Verify the user token
     const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);
