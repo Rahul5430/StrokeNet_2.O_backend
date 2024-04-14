@@ -1,5 +1,4 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("../google-secrets.json");
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
 const socketIo = require("socket.io");
@@ -9,9 +8,7 @@ const {
   UsersConversations,
 } = require("../models/ConversationCollection");
 const nodemailer = require("nodemailer");
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+
 
 const connectToSocket = (server) => {
   const io = socketIo(server, { cors: {} });

@@ -1,3 +1,4 @@
+const admin = require('firebase-admin');
 const Patient = require("../models/PatientCollection");
 const Centers = require("../models/CentersCollection");
 const Page = require("../models/PageCollection");
@@ -8,6 +9,59 @@ const path = require("path");
 const { ValidateUser } = require("./authController");
 const { v4: uuidv4 } = require("uuid");
 const { executeQuery } = require("../config/sqlDatabase");
+
+// Initialize Firebase Storage
+// const storage = new Storage({
+// 	projectId: serviceAccount.project_id,
+// 	credentials: serviceAccount,
+// });
+
+const uploadFile = async (req, res) => {
+  try {
+    const headerUserId = req.headers.userid;
+    const headerUserToken = req.headers.usertoken;
+
+    // Validate user (you can implement your user validation logic here)
+    if (await ValidateUser(headerUserId, headerUserToken)) {
+      if (!req.file) {
+        return res.status(400).send("No file uploaded.");
+      }
+  
+      const storage = admin.storage();
+      const bucket = storage.bucket();
+      const file = bucket.file(req.file.originalname);
+      
+      // Create a write stream to upload file data
+      const fileStream = file.createWriteStream({
+        metadata: {
+          contentType: req.file.mimetype // Set the content type based on the uploaded file
+        }
+      });
+  
+      fileStream.on("error", (err) => {
+        console.error("Error uploading file:", err);
+        res.status(500).send("Error uploading file.");
+      });
+  
+      fileStream.on("finish", () => {
+        // File upload complete
+        res.status(200).send("File uploaded successfully.");
+      });
+  
+      // Pipe the file data from req.file.buffer to Firebase Storage
+      fileStream.end(req.file.buffer);
+
+      const fileName = req.file?.filename;
+      res.status(200).json(fileName);
+    } else {
+      console.log("invalid cred");
+      return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
+    }
+  } catch (error) {
+    console.error("An error occurred:", error);
+    return res.status(500).json({ data: { message: "An error occurred" } });
+  }
+};
 
 const addPatient = async (req, res) => {
   try {
@@ -1405,6 +1459,7 @@ const getHubSpokeCenters = async (req, res, args) => {
 };
 
 module.exports = {
+  uploadFile,
   addPatient,
   getUserPatients,
   getSinglePatient,
