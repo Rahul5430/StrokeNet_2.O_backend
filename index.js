@@ -20,11 +20,13 @@ app.use(express.urlencoded());
 app.use(express.static("public"));
 app.use("/", require("./routes/router"));
 
-connectDb();
+// connectDb();
 
 mongoose.connection.once("open", async () => {
   console.log("Connected To MONGODB");
-  server.listen(process.env.PORT, () => {
-    console.log("Listening on Port ", process.env.PORT);
-  });
+ 
+});
+
+server.listen(process.env.PORT, () => {
+  console.log("Listening on Port ", process.env.PORT);
 });

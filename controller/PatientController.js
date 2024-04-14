@@ -157,6 +157,7 @@ const addPatient = async (req, res) => {
           covid_values,
           name,
           age,
+          gender,
           weakness_side,
           first_name,
           last_name,
@@ -164,9 +165,23 @@ const addPatient = async (req, res) => {
           last_updated,
           created,
           center_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      ) VALUES (?, ?, ?, ?, ?, IFNULL(?, gender), ?, ?, ?, ?, ?, ?, ?)`;
 
-        await executeQuery(addPatientQuery, Object.values(patientData));
+        await executeQuery(addPatientQuery, [
+          patientData.datetime_of_stroke,
+          patientData.covid_score,
+          patientData.covid_values,
+          patientData.name,
+          patientData.age,
+          patientData.gender || undefined,
+          patientData.weakness_side,
+          patientData.first_name,
+          patientData.last_name,
+          patientData.created_by,
+          patientData.last_updated,
+          patientData.created,
+          patientData.center_id,
+        ]);
 
         const lastInsertedIdQuery = `SELECT LAST_INSERT_ID() as lastInsertId`;
         const lastInsertedIdResult = await executeQuery(lastInsertedIdQuery);
@@ -176,12 +191,50 @@ const addPatient = async (req, res) => {
 
         // Query the patients table again to fetch the inserted record
         const getPatientQuery = `SELECT * FROM patients WHERE id = ?`;
-        const insertedPatientResult = await executeQuery(getPatientQuery, [
+        const [insertedPatientResult] = await executeQuery(getPatientQuery, [
           lastInsertedId,
         ]);
 
+        const addPatientNihssQuery = `INSERT INTO patient_nihss (patient_id, nihss_time)
+        VALUES
+            (${lastInsertedId}, '24_hours'),
+            (${lastInsertedId}, 'discharge'),
+            (${lastInsertedId}, 'admission');
+        `;
+
+        executeQuery(addPatientNihssQuery);
+        const fetchPatientNihss = `SELECT nihss_time, nihss_value, nihss_options FROM patient_nihss WHERE patient_id = ${lastInsertedId}`;
         // Extract the inserted patient object
-        const insertedPatient = insertedPatientResult[0];
+        const patientNihssData = await executeQuery(fetchPatientNihss);
+        const insertedPatient = insertedPatientResult;
+        insertedPatient.patient_nihss = {};
+        patientNihssData.forEach((row) => {
+          insertedPatient.patient_nihss[row.nihss_time] = {
+            nihss_value: row.nihss_value,
+            nihss_options: row.nihss_options || "",
+          };
+        });
+
+        const addPatientMrsQuery = `INSERT INTO patient_mrs (patient_id, mrs_time)
+        VALUES
+            (${lastInsertedId}, '1_month'),
+            (${lastInsertedId}, 'discharge'),
+            (${lastInsertedId}, '3_months');
+        `;
+
+        executeQuery(addPatientMrsQuery);
+        const fetchPatientMrs = `SELECT mrs_time, mrs_points, mrs_options FROM patient_mrs WHERE patient_id = ${lastInsertedId}`;
+        // Extract the inserted patient object
+        const patientMrsData = await executeQuery(fetchPatientMrs);
+        insertedPatient.patient_mrs = {};
+        patientMrsData.forEach((row) => {
+          insertedPatient.patient_mrs[row.mrs_time] = {
+            mrs_points: row.mrs_points,
+            mrs_options: row.mrs_options || "",
+          };
+        });
+
+        // insertedPatient.patient_nihss = ;
 
         // console.log(insertedPatient);
 
@@ -275,7 +328,7 @@ const getUserPatients = async (req, res) => {
       // });
       const getStrokeType = val.patient_scan_times;
       if (
-        getStrokeType && 
+        getStrokeType &&
         getStrokeType.type_of_stroke &&
         getStrokeType.type_of_stroke !== null
       ) {
@@ -328,7 +381,7 @@ const getUserPatients = async (req, res) => {
           // });
           const getStrokeType = val.patient_scan_times;
           if (
-            getStrokeType && 
+            getStrokeType &&
             getStrokeType.type_of_stroke &&
             getStrokeType.type_of_stroke !== null
           ) {
@@ -397,15 +450,36 @@ const getSinglePatient = async (req, res) => {
 // const patientCheckedbyUse = (patientId, userId, patient_last_updated) => {};
 
 const getPatientDetails = async (patientID, userId) => {
-  console.log('pp',patientID);
   // Get the information of the patient
-  const [patient] = await executeQuery(
-    "SELECT * FROM Patients WHERE id = ?",
-    [patientID]
-  );
+  const [patient] = await executeQuery("SELECT * FROM Patients WHERE id = ?", [
+    patientID,
+  ]);
   if (!patient) {
     return null;
   }
+  const fetchPatientNihss = `SELECT nihss_time, nihss_value, nihss_options FROM patient_nihss WHERE patient_id = ${patientID}`;
+  // Extract the inserted patient object
+  const patientNihssData = await executeQuery(fetchPatientNihss);
+
+  patient.patient_nihss = {};
+
+  patientNihssData.forEach((row) => {
+    patient.patient_nihss[row.nihss_time] = {
+      nihss_value: row.nihss_value,
+      nihss_options: row.nihss_options || "",
+    };
+  });
+
+  const fetchPatientMrs = `SELECT mrs_time, mrs_points, mrs_options FROM patient_mrs WHERE patient_id = ${patientID}`;
+  // Extract the inserted patient object
+  const patientMrsData = await executeQuery(fetchPatientMrs);
+  patient.patient_mrs = {};
+  patientMrsData.forEach((row) => {
+    patient.patient_mrs[row.mrs_time] = {
+      mrs_points: row.mrs_points,
+      mrs_options: row.mrs_options || "",
+    };
+  });
 
   // patient.created = new Date(patient.created * 1000).toLocaleString();
   // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
@@ -522,7 +596,7 @@ const updateBasicData = async (req, res) => {
 
   if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
-    // console.log(data);
+    console.log(data);
 
     const errors = [];
 
@@ -540,7 +614,10 @@ const updateBasicData = async (req, res) => {
     } else {
       const patientBasicData = {};
 
-      const updatePatientBasicDetails = await Patient.findById(data.patient_id);
+      const [updatePatientBasicDetails] = await executeQuery(
+        "SELECT * FROM Patients WHERE id = ?",
+        [data.patient_id]
+      );
 
       if (data.first_name && data.first_name) {
         updatePatientBasicDetails.first_name = data.first_name;
@@ -555,7 +632,9 @@ const updateBasicData = async (req, res) => {
         updatePatientBasicDetails.name = data.first_name + " " + data.last_name;
       }
 
-      patientBasicData.date_of_birth = data.date_of_birth;
+      patientBasicData.date_of_birth = data.date_of_birth
+        .slice(0, 19)
+        .replace("T", " ");
       updatePatientBasicDetails.date_of_birth = data.date_of_birth;
 
       if (data.date_of_birth)
@@ -644,40 +723,134 @@ const updateBasicData = async (req, res) => {
       }
 
       if (data.admission_time && data.admission_time) {
-        patientBasicData.admission_time = data.admission_time;
+        patientBasicData.admission_time = data.admission_time
+          .replace("T", " ")
+          .replace("Z", "");
       }
 
-      patientBasicData.last_updated = new Date().toISOString();
+      patientBasicData.last_updated = new Date(Date.now())
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
 
       updatePatientBasicDetails.patient_basic_details = patientBasicData;
 
-      const user = await User.findById(headerUserId);
+      const user = await executeQuery(
+        "SELECT * FROM usercollection WHERE id = ?",
+        [headerUserId]
+      );
 
       updatePatientBasicDetails.last_update = {
         update_type: "BasicDetails",
         user_id: {
-          user_id: user._id,
-          fullname: user.fullname,
-          user_role: user.user_role,
+          user_id: user.id,
+          fullname: user.name,
+          user_role: user.userRole,
         },
         last_updated: Date.now(),
       };
 
-      updatePatientBasicDetails.last_updated = Date.now();
+      updatePatientBasicDetails.last_updated = new Date().toISOString();
 
-      await updatePatientBasicDetails.save();
+      console.log(updatePatientBasicDetails);
+      const updateQuery = `
+      UPDATE Patients
+      SET 
+          name = IFNULL(?, name), 
+          first_name = IFNULL(?, first_name), 
+          last_name = IFNULL(?, last_name), 
+          date_of_birth = IFNULL(?, date_of_birth), 
+          age = IFNULL(?, age), 
+          gender = IFNULL(?, gender), 
+          contact_number = IFNULL(?, contact_number), 
+          admission_time = IFNULL(?, admission_time), 
+          datetime_of_stroke = IFNULL(?, datetime_of_stroke), 
+          datetime_of_stroke_timeends = IFNULL(?, datetime_of_stroke_timeends), 
+          datetime_of_stroke_fortyfive_deadline = IFNULL(?, datetime_of_stroke_fortyfive_deadline), 
+          handedness = IFNULL(?, handedness), 
+          weakness_side = IFNULL(?, weakness_side), 
+          facial_deviation = IFNULL(?, facial_deviation), 
+          co_morbidities = IFNULL(?, co_morbidities), 
+          similar_episodes_in_past = IFNULL(?, similar_episodes_in_past), 
+          similar_episodes_in_past_text = IFNULL(?, similar_episodes_in_past_text), 
+          inclusion_exclusion_assessed = IFNULL(?, inclusion_exclusion_assessed), 
+          bp_x = IFNULL(?, bp_x), 
+          bp_y = IFNULL(?, bp_y), 
+          rbs = IFNULL(?, rbs), 
+          inr = IFNULL(?, inr), 
+          aspects = IFNULL(?, aspects), 
+          body_weight = IFNULL(?, body_weight), 
+          blood_group = IFNULL(?, blood_group), 
+          scans_needed = IFNULL(?, scans_needed), 
+          scans_completed = IFNULL(?, scans_completed), 
+          scans_uploaded = IFNULL(?, scans_uploaded), 
+          covid_score = IFNULL(?, covid_score), 
+          covid_values = IFNULL(?, covid_values), 
+          ivt_medication = IFNULL(?, ivt_medication), 
+          ivt_careful = IFNULL(?, ivt_careful), 
+          is_wakeup_stroke = IFNULL(?, is_wakeup_stroke), 
+          is_hospital_stroke = IFNULL(?, is_hospital_stroke), 
+          notes = IFNULL(?, notes), 
+          last_updated = IFNULL(STR_TO_DATE(?, '%Y-%m-%d %H:%i:%s'), last_updated) 
+      WHERE 
+          id = ?;
+  `;
 
-      // ci.db.update("user_patients", { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
+      // Replace null values with undefined to prevent them from being updated
+      const values = [
+        patientBasicData.name || undefined,
+        patientBasicData.first_name || undefined,
+        patientBasicData.last_name || undefined,
+        patientBasicData.date_of_birth || undefined,
+        patientBasicData.age || undefined,
+        patientBasicData.gender || undefined,
+        patientBasicData.contact_number || undefined,
+        patientBasicData.admission_time || undefined,
+        patientBasicData.datetime_of_stroke || undefined,
+        patientBasicData.datetime_of_stroke_timeends || undefined,
+        patientBasicData.datetime_of_stroke_fortyfive_deadline || undefined,
+        patientBasicData.handedness || undefined,
+        patientBasicData.weakness_side || undefined,
+        patientBasicData.facial_deviation || undefined,
+        patientBasicData.co_morbidities || undefined,
+        patientBasicData.similar_episodes_in_past || undefined,
+        patientBasicData.similar_episodes_in_past_text || undefined,
+        patientBasicData.inclusion_exclusion_assessed || undefined,
+        patientBasicData.bp_x || undefined,
+        patientBasicData.bp_y || undefined,
+        patientBasicData.rbs || undefined,
+        patientBasicData.inr || undefined,
+        patientBasicData.aspects || undefined,
+        patientBasicData.body_weight || undefined,
+        patientBasicData.blood_group || undefined,
+        patientBasicData.scans_needed || undefined,
+        patientBasicData.scans_completed || undefined,
+        patientBasicData.scans_uploaded || undefined,
+        patientBasicData.covid_score || undefined,
+        patientBasicData.covid_values || undefined,
+        patientBasicData.ivt_medication || undefined,
+        patientBasicData.ivt_careful || undefined,
+        patientBasicData.is_wakeup_stroke || undefined,
+        patientBasicData.is_hospital_stroke || undefined,
+        patientBasicData.notes || undefined,
+        patientBasicData.last_updated || undefined,
+        data.patient_id,
+      ];
+      const updatedPatient = await executeQuery(updateQuery, values);
 
-      // const updateData = {
-      //     user_id: headerUserId[0],
-      //     patient_id: data.patient_id,
-      //     update_type: "basic_details",
-      //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
-      //     last_updated: new Date().toISOString(),
-      // };
+      console.log(updatedPatient);
 
-      // updatePatientStatus(updateData);
+      //   // ci.db.update("user_patients", { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
+
+      //   // const updateData = {
+      //   //     user_id: headerUserId[0],
+      //   //     patient_id: data.patient_id,
+      //   //     update_type: "basic_details",
+      //   //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+      //   //     last_updated: new Date().toISOString(),
+      //   // };
+
+      //   // updatePatientStatus(updateData);
 
       const output = {
         data: "Basic Details updates successfully.",
@@ -956,50 +1129,102 @@ const updatePatientComplications = async (req, res) => {
   }
 };
 
+// const updateNIHSSofPatient = async (req, res) => {
+//   const headerUserId = req.headers.userid;
+//   const headerUserToken = req.headers.usertoken;
+//   if (await ValidateUser(headerUserId, headerUserToken)) {
+//     const data = req.body;
+//     // console.log(data);
+//     const errors = [];
+//     if (!data.patient_id) errors.push("patient_id is required");
+//     else if (!data.nihss_time) errors.push("nihss_time is required");
+//     else if (!data.nihss_value) errors.push("nihss_value is required");
+
+//     if (errors.length > 0) {
+//       return res.status(403).json({ message: errors[0] });
+//     } else {
+//       const patientNIHSS = {
+//         nihss_time: data.nihss_time,
+//         nihss_value: data.nihss_value,
+//       };
+//       console.log(patientNIHSS);
+
+//       if (data.nihss_options) {
+//         patientNIHSS.nihss_options = data.nihss_options;
+//       }
+
+//       // const updatedNihssPatient = await Patient.findById(data.patient_id);
+//       // updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_value =
+//       //   patientNIHSS.nihss_value;
+//       // updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_options =
+//       //   patientNIHSS.nihss_options;
+
+//       // updatedNihssPatient.last_updated = Date.now();
+
+//       // await updatedNihssPatient.save();
+
+//       const output = {
+//         data: {
+//           message: "NIHSS was updated successfully",
+//           nihss_data: patientNIHSS,
+//         },
+//       };
+
+//       res.status(200).json(output);
+//     }
+//   } else {
+//     return res.status(403).json({ message: "INVALID_CREDENTIALS" });
+//   }
+// };
+
 const updateNIHSSofPatient = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
   if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
-    // console.log(data);
     const errors = [];
     if (!data.patient_id) errors.push("patient_id is required");
     else if (!data.nihss_time) errors.push("nihss_time is required");
     else if (!data.nihss_value) errors.push("nihss_value is required");
 
     if (errors.length > 0) {
-      return res.status(403).json({ message: errors[0] });
+      return res.status(403).json({ data: { message: errors[0] } });
     } else {
-      const patientNIHSS = {
-        nihss_time: data.nihss_time,
-        nihss_value: data.nihss_value,
-      };
+      // Construct the SQL query
+      let sql = `UPDATE patient_nihss SET nihss_value = ?`;
+      const params = [data.nihss_value];
 
       if (data.nihss_options) {
-        patientNIHSS.nihss_options = data.nihss_options;
+        sql += `, nihss_options = ?`;
+        params.push(data.nihss_options);
       }
 
-      const updatedNihssPatient = await Patient.findById(data.patient_id);
-      updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_value =
-        patientNIHSS.nihss_value;
-      updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_options =
-        patientNIHSS.nihss_options;
+      sql += ` WHERE patient_id = ? AND nihss_time = ?`;
+      params.push(data.patient_id, data.nihss_time);
 
-      updatedNihssPatient.last_updated = Date.now();
-
-      await updatedNihssPatient.save();
-
-      const output = {
-        data: {
-          message: "NIHSS was updated successfully",
-          nihss_data: patientNIHSS,
-        },
-      };
-
-      res.status(200).json(output);
+      console.log(params, sql);
+      // Execute the query
+      try {
+        await executeQuery(sql, params);
+        res.status(200).json({
+          data: {
+            message: "NIHSS was updated successfully",
+            nihss_data: {
+              nihss_time: data.nihss_time,
+              nihss_value: data.nihss_value,
+              nihss_options: data.nihss_options || null,
+            },
+          },
+        });
+      } catch (err) {
+        console.error("SQL Error:", err.message);
+        res
+          .status(500)
+          .json({ data: { message: "Failed to update NIHSS data" } });
+      }
     }
   } else {
-    return res.status(403).json({ message: "INVALID_CREDENTIALS" });
+    return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
   }
 };
 
@@ -1029,21 +1254,35 @@ const updateMRSofPatient = async (req, res) => {
         mrs_points: data.mrs_points,
       };
 
-      const updatedMRSPatient = await Patient.findById(data.patient_id);
-      updatedMRSPatient.patient_mrs[data.mrs_time].mrs_options =
-        patientMRS.mrs_options;
-      updatedMRSPatient.patient_mrs[data.mrs_time].mrs_points =
-        patientMRS.mrs_points;
+      // const updatedMRSPatient = await Patient.findById(data.patient_id);
+      // updatedMRSPatient.patient_mrs[data.mrs_time].mrs_options =
+      //   patientMRS.mrs_options;
+      // updatedMRSPatient.patient_mrs[data.mrs_time].mrs_points =
+      //   patientMRS.mrs_points;
 
-      updatedMRSPatient.last_updated = Date.now();
-      await updatedMRSPatient.save();
+      // updatedMRSPatient.last_updated = Date.now();
+      // await updatedMRSPatient.save();
+
+      const updateQuery = `
+      UPDATE patient_mrs
+      SET mrs_options = ?,
+          mrs_points = ?
+      WHERE patient_id = ? AND mrs_time = ?;
+  `;
+  
+  const valuesMrs = [
+      patientMRS.mrs_options,
+      patientMRS.mrs_points,
+      data.patient_id,
+      patientMRS.mrs_time,
+  ];
+      await executeQuery(updateQuery, valuesMrs);
 
       // Update last_updated field in Patients table
       // db.update('patients', { last_updated: new Date().toISOString() }, { id: data.patient_id });
       // db.update('user_patients', { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
 
       // const patientMRSData = db.select('patient_mrs', ['mrs_time', 'mrs_options'], { patient_id: data.patient_id });
-      const mrsData = updatedMRSPatient.patient_mrs;
       // patientMRSData.forEach((val) => {
       //   mrsData[val.mrs_time] = val;
       // });
@@ -1060,7 +1299,7 @@ const updateMRSofPatient = async (req, res) => {
       // // Global Status
 
       const output = {
-        data: { message: "MRS was updated successfully", mrs_data: mrsData },
+        data: { message: "MRS was updated successfully", mrs_data: patientMRS },
       };
       return res.status(200).json(output);
     }
@@ -1180,7 +1419,6 @@ const codeStrokeAlert = async (req, res) => {
         "SELECT * FROM centerscollection WHERE id = ?",
         [getPatientCenterId.center_id]
       );
-      console.log('pp',getCenterInfo);
 
       if (getCenterInfo.is_hub == "yes") {
         const Users = await executeQuery(
@@ -1189,7 +1427,7 @@ const codeStrokeAlert = async (req, res) => {
         );
         Users.forEach((user) => {
           if (user.fcm_userid != "") {
-            console.log('hello',user.fcm_userid);
+            console.log("hello", user.fcm_userid);
             sendNotification(user.fcm_userid, "codeStrokeAlert", {
               getCenterInfo: getCenterInfo,
               getUserCenterId: getPatientCenterId,
@@ -1198,16 +1436,16 @@ const codeStrokeAlert = async (req, res) => {
           }
         });
       } else {
-      //   const Users = await User.find({ center_id: getCenterInfo });
-      //   Users.forEach((user) => {
-      //     if (user.fcm_userid != "") {
-      //       sendNotification(user.fcm_userid, "codeStrokeAlert", {
-      //         getCenterInfo: getCenterInfo,
-      //         getUserCenterId: getUserCenterId,
-      //         patientId: data.patient_id,
-      //       });
-      //     }
-      //   });
+        //   const Users = await User.find({ center_id: getCenterInfo });
+        //   Users.forEach((user) => {
+        //     if (user.fcm_userid != "") {
+        //       sendNotification(user.fcm_userid, "codeStrokeAlert", {
+        //         getCenterInfo: getCenterInfo,
+        //         getUserCenterId: getUserCenterId,
+        //         patientId: data.patient_id,
+        //       });
+        //     }
+        //   });
       }
 
       const output = { data: { message: "Code Stroke Sent!" } };
