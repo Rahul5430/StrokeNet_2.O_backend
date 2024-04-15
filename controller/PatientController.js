@@ -234,9 +234,14 @@ const addPatient = async (req, res) => {
           };
         });
 
-        // insertedPatient.patient_nihss = ;
+        const addPatientComplicationsQuery = `INSERT INTO patient_complications (patient_id)
+        VALUES (${lastInsertedId})`;
+        await executeQuery(addPatientComplicationsQuery);
 
-        // console.log(insertedPatient);
+        const fetchPatientComplicationsQuery = `SELECT * FROM patient_complications WHERE patient_id = ${lastInsertedId}`;
+        insertedPatient.patient_complications = await executeQuery(
+          fetchPatientComplicationsQuery
+        );
 
         // const savedPatient = await Patient.insertMany([patientData]);
         return res.status(200).json({ data: insertedPatient });
@@ -481,6 +486,13 @@ const getPatientDetails = async (patientID, userId) => {
     };
   });
 
+  const fetchPatientComplicationsQuery = `SELECT * FROM patient_complications WHERE patient_id = ${patientID}`;
+  const [patientComplicationsData] = await executeQuery(
+    fetchPatientComplicationsQuery
+  );
+
+  patient.patient_complications = patientComplicationsData;
+
   // patient.created = new Date(patient.created * 1000).toLocaleString();
   // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
 
@@ -632,10 +644,10 @@ const updateBasicData = async (req, res) => {
         updatePatientBasicDetails.name = data.first_name + " " + data.last_name;
       }
 
-      patientBasicData.date_of_birth = data.date_of_birth
-        .slice(0, 19)
-        .replace("T", " ");
-      updatePatientBasicDetails.date_of_birth = data.date_of_birth;
+      if (data.date_of_birth) {
+        patientBasicData.date_of_birth = data.date_of_birth;
+        updatePatientBasicDetails.date_of_birth = data.date_of_birth;
+      }
 
       if (data.date_of_birth)
         patientBasicData.age = calculateAge(data.date_of_birth);
@@ -984,7 +996,7 @@ const updatePatientComplications = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if (await ValidateUser(headerUserId, headerUserToken)) {
     const data = req.body;
-    // console.log(req.body);
+    console.log(req.body);
     const errors = [];
 
     if (!data.patient_id || data.patient_id === "") {
@@ -1083,17 +1095,81 @@ const updatePatientComplications = async (req, res) => {
         patientComplications.others_duration = data.others_duration;
       }
 
-      patientComplications.last_updated = new Date().toISOString();
+      const updateQuery = `
+      UPDATE patient_complications
+      SET 
+        bed_sore = IFNULL(?, bed_sore),
+        bed_sore_site = ?,
+        bed_sore_degree = ?,
+        bed_sore_duration = ?,
+        bed_sore_photo = ?,
+        aspiration = IFNULL(?, aspiration),
+        aspiration_duration = ?,
+        deep_vein_thrombosis = IFNULL(?, deep_vein_thrombosis),
+        deep_vein_thrombosis_site = ?,
+        deep_vein_thrombosis_duration = ?,
+        frozen_shoulder = IFNULL(?, frozen_shoulder),
+        frozen_shoulder_site = ?,
+        frozen_shoulder_duration = ?,
+        contracture = IFNULL(?, contracture),
+        contracture_site = ?,
+        contracture_duration = ?,
+        spasticity = IFNULL(?, spasticity),
+        spasticity_site = ?,
+        spasticity_duration = ?,
+        cauti = IFNULL(?, cauti),
+        cauti_duration = ?,
+        others = IFNULL(?, others),
+        others_information = ?,
+        others_duration = ?,
+        last_updated = NOW()
+      WHERE patient_id = ?;      
+`;
 
-      const updatedPatientcomplications = await Patient.findById(
+console.log(patientComplications);
+
+      const valuesComplications = [
+        patientComplications.bed_sore || undefined,
+        patientComplications.bed_sore_site || undefined,
+        patientComplications.bed_sore_degree || undefined,
+        patientComplications.bed_sore_duration || undefined,
+        patientComplications.bed_sore_photo || undefined,
+        patientComplications.aspiration || undefined,
+        patientComplications.aspiration_duration || undefined,
+        patientComplications.deep_vein_thrombosis || undefined,
+        patientComplications.deep_vein_thrombosis_site || undefined,
+        patientComplications.deep_vein_thrombosis_duration || undefined,
+        patientComplications.frozen_shoulder || undefined,
+        patientComplications.frozen_shoulder_site || undefined,
+        patientComplications.frozen_shoulder_duration || undefined,
+        patientComplications.contracture || undefined,
+        patientComplications.contracture_site || undefined,
+        patientComplications.contracture_duration || undefined,
+        patientComplications.spasticity || undefined,
+        patientComplications.spasticity_site || undefined,
+        patientComplications.spasticity_duration || undefined,
+        patientComplications.cauti || undefined,
+        patientComplications.cauti_duration || undefined,
+        patientComplications.others || undefined,
+        patientComplications.others_information || undefined,
+        patientComplications.others_duration || undefined,
         data.patient_id
-      );
-      // console.log(updatedPatientcomplications);
-      updatedPatientcomplications.patient_complications = patientComplications;
+      ];
 
-      updatedPatientcomplications.last_updated = Date.now();
+      const rss = await executeQuery(updateQuery,valuesComplications);
 
-      await updatedPatientcomplications.save();
+      console.log(rss);
+      // patientComplications.last_updated = new Date().toISOString();
+
+      // const updatedPatientcomplications = await Patient.findById(
+      //   data.patient_id
+      // );
+      // // console.log(updatedPatientcomplications);
+      // updatedPatientcomplications.patient_complications = patientComplications;
+
+      // updatedPatientcomplications.last_updated = Date.now();
+
+      // await updatedPatientcomplications.save();
 
       // await db
       //   .collection("patients")
@@ -1269,13 +1345,13 @@ const updateMRSofPatient = async (req, res) => {
           mrs_points = ?
       WHERE patient_id = ? AND mrs_time = ?;
   `;
-  
-  const valuesMrs = [
-      patientMRS.mrs_options,
-      patientMRS.mrs_points,
-      data.patient_id,
-      patientMRS.mrs_time,
-  ];
+
+      const valuesMrs = [
+        patientMRS.mrs_options,
+        patientMRS.mrs_points,
+        data.patient_id,
+        patientMRS.mrs_time,
+      ];
       await executeQuery(updateQuery, valuesMrs);
 
       // Update last_updated field in Patients table
