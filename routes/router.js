@@ -7,7 +7,6 @@ const {
   getHubs,
   globalSettings,
   getSinglePage,
-  uploadFile,
   contactUs
 } = require("../controller/GlobalController");
 
@@ -27,6 +26,7 @@ const {
   changePassword
 } = require("../controller/authController");
 const {
+  uploadFile,
   addPatient,
   getUserPatients,
   getSinglePatient,
@@ -61,18 +61,18 @@ const {
 } = require("../controller/OtpController");
 
 const multer = require("multer");
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const absolutePath = path.join(__dirname, "../public/files/");
-    return cb(null, absolutePath);
-  },
-  filename: async function (req, file, cb) {
-    console.log(file.originalname);
-    const filename = `${Date.now()}-${file.originalname}`;
-    return cb(null, filename);
-  },
-});
-const upload = multer({ storage: storage });
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     const absolutePath = path.join(__dirname, "../public/files/");
+//     return cb(null, absolutePath);
+//   },
+//   filename: async function (req, file, cb) {
+//     console.log(file.originalname);
+//     const filename = `${Date.now()}-${file.originalname}`;
+//     return cb(null, filename);
+//   },
+// });
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post("/upload", upload.single("file"), uploadFile);
 router.post("/UserVerification", UserVerification);

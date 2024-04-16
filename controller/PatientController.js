@@ -1,3 +1,4 @@
+const admin = require('firebase-admin');
 const Patient = require("../models/PatientCollection");
 const Centers = require("../models/CentersCollection");
 const Page = require("../models/PageCollection");
@@ -8,6 +9,59 @@ const path = require("path");
 const { ValidateUser } = require("./authController");
 const { v4: uuidv4 } = require("uuid");
 const { executeQuery } = require("../config/sqlDatabase");
+
+// Initialize Firebase Storage
+// const storage = new Storage({
+// 	projectId: serviceAccount.project_id,
+// 	credentials: serviceAccount,
+// });
+
+const uploadFile = async (req, res) => {
+  try {
+    const headerUserId = req.headers.userid;
+    const headerUserToken = req.headers.usertoken;
+
+    // Validate user (you can implement your user validation logic here)
+    if (await ValidateUser(headerUserId, headerUserToken)) {
+      if (!req.file) {
+        return res.status(400).send("No file uploaded.");
+      }
+  
+      const storage = admin.storage();
+      const bucket = storage.bucket();
+      const file = bucket.file(req.file.originalname);
+      
+      // Create a write stream to upload file data
+      const fileStream = file.createWriteStream({
+        metadata: {
+          contentType: req.file.mimetype // Set the content type based on the uploaded file
+        }
+      });
+  
+      fileStream.on("error", (err) => {
+        console.error("Error uploading file:", err);
+        res.status(500).send("Error uploading file.");
+      });
+  
+      fileStream.on("finish", () => {
+        // File upload complete
+        res.status(200).send("File uploaded successfully.");
+      });
+  
+      // Pipe the file data from req.file.buffer to Firebase Storage
+      fileStream.end(req.file.buffer);
+
+      const fileName = req.file?.filename;
+      res.status(200).json(fileName);
+    } else {
+      console.log("invalid cred");
+      return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
+    }
+  } catch (error) {
+    console.error("An error occurred:", error);
+    return res.status(500).json({ data: { message: "An error occurred" } });
+  }
+};
 
 const addPatient = async (req, res) => {
   try {
@@ -947,6 +1001,18 @@ const updateScanTimesofPatient = async (req, res) => {
 
         patientScanTimes.last_updated = new Date().toISOString();
 
+
+        // Construct SQL query to update patient scan times
+        const updateQuery = `
+          UPDATE Patients
+          SET patient_scan_times = ?,
+              last_updated = ?,
+              patient_basic_details = JSON_SET(patient_basic_details, '$.aspects', ?)
+          WHERE id = ?
+        `;
+        const currentDate = new Date().toISOString();
+        await executeQuery(updateQuery, [JSON.stringify(patientScanTimes), currentDate, JSON.stringify(data.aspects), data.patient_id]);
+
         const updatePatientScanTimesQuery = `UPDATE patient_scan_times
         SET 
             ct_scan_time = IFNULL(?, ct_scan_time),
@@ -990,7 +1056,7 @@ const updateScanTimesofPatient = async (req, res) => {
         // updatePatientScanTimes.patient_basic_details.aspects = data.aspects;
 
         // await updatePatientScanTimes.save();
-
+        
         // Update last_updated field in Patients collection
         // const updatePatients = await db.collection('patients').updateOne(
         //     { id: data.patient_id },
@@ -1454,19 +1520,42 @@ const addPatientScanFile = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if (await ValidateUser(headerUserId, headerUserToken)) {
     try {
-      const user = await User.findById(headerUserId);
+      // Fetch user details
+      const [user] = await executeQuery(
+        "SELECT * FROM usercollection WHERE id = ?",
+        [headerUserId]
+      );
+
+      // Fetch patient details
       const filedata = req.body;
-      const patientFile = await Patient.findById(filedata.patient_id);
-      const dataForDB = {
-        file_type: filedata.file_type,
-        file: filedata.file,
-        user_role: user.user_role,
-        created: Date.now(),
-      };
-      patientFile.patient_files[filedata.scan_type].push(dataForDB);
-      patientFile.total_scans = patientFile.total_scans + 1;
-      patientFile.last_updated = Date.now();
-      await patientFile.save();
+      const [patientFile] = await executeQuery(
+        "SELECT * FROM Patients WHERE id = ?",
+        [filedata.patient_id]
+      );
+
+      // Insert new scan file
+      const insertQuery = `
+        INSERT INTO patient_files (patient_id, file_type, file, user_role, created)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      const currentDate = Date.now();
+      const dataForDB = [
+        filedata.patient_id,
+        filedata.file_type,
+        filedata.file,
+        user.user_role,
+        currentDate
+      ];
+      await executeQuery(insertQuery, dataForDB);
+
+      // Update patient file details
+      const updateQuery = `
+        UPDATE Patients 
+        SET total_scans = total_scans + 1, last_updated = ?
+        WHERE id = ?
+      `;
+      await query(updateQuery, [currentDate, filedata.patient_id]);
+
       const output = { data: { file: dataForDB, message: "file_uploaded" } };
       res.status(200).json(output);
     } catch (err) {
@@ -1496,7 +1585,10 @@ const deletePatientFile = async (req, res) => {
     } else {
       const filePath = path.join(__dirname, "../public/files/") + data.file_id;
       // console.log(path.join(__dirname, "../public/files/"));
-      const patient = await Patient.findById(data.patient_id);
+      const [patient] = await executeQuery(
+        "SELECT * FROM Patients WHERE id = ?",
+        [data.patient_id]
+      );
       if (!patient) {
         const output = { data: { message: "Patient Not Valid" } };
         res.status(403).json(output);
@@ -1508,13 +1600,22 @@ const deletePatientFile = async (req, res) => {
           res.status(403).json(output);
         } else {
           try {
-            const patientScanTypeFile = patient.patient_files[data.scan_type];
-            patient.patient_files[data.scan_type] = patientScanTypeFile.filter(
-              (item) => item.file !== data.file_id
-            );
-            patient.total_scans = patient.total_scans - 1;
-            patient.last_updated = Date.now();
-            await patient.save();
+            // Construct SQL query to delete file from patient_files table
+            const deleteQuery = `
+              DELETE FROM patient_files
+              WHERE patient_id = ? AND file = ? AND file_type = ?
+            `;
+            await executeQuery(deleteQuery, [data.patient_id, data.file_id, data.scan_type]);
+
+            // Update patient's total_scans and last_updated fields
+            const updateQuery = `
+              UPDATE Patients
+              SET total_scans = total_scans - 1, last_updated = ?
+              WHERE id = ?
+            `;
+            const currentDate = new Date().toISOString();
+            await executeQuery(updateQuery, [currentDate, data.patient_id]);
+
             const output = { data: { message: "file_deleted" } };
             res.status(200).json(output);
           } catch (err) {
@@ -1739,6 +1840,7 @@ const getHubSpokeCenters = async (req, res, args) => {
 };
 
 module.exports = {
+  uploadFile,
   addPatient,
   getUserPatients,
   getSinglePatient,

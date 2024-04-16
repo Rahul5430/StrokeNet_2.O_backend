@@ -7,6 +7,13 @@ const http = require("http");
 const app = express();
 const { connectToSocket } = require("./controller/BaseController");
 require("dotenv").config();
+const admin = require("firebase-admin");
+const serviceAccount = require("./google-secrets.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: 'strokenet-69e32.appspot.com',
+});
 
 const server = http.createServer(app);
 connectToSocket(server);
