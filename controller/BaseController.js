@@ -9,7 +9,6 @@ const {
 } = require("../models/ConversationCollection");
 const nodemailer = require("nodemailer");
 
-
 const connectToSocket = (server) => {
   const io = socketIo(server, { cors: {} });
   io.on("connection", (socket) => {
@@ -74,7 +73,7 @@ const connectToSocket = (server) => {
     });
 
     socket.on("PatientUpdate", async (data) => {
-      const patient = await Patient.findById(data.id);
+      const patient = await getPatientDetails(data.id);
       socket.broadcast.to(data.id).emit("PatientUpdated", patient);
       if (data.type && data.type == "uploads") {
         const filestab = patient.patient_files[data.tab];
