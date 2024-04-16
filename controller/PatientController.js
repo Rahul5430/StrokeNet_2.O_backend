@@ -239,9 +239,20 @@ const addPatient = async (req, res) => {
         await executeQuery(addPatientComplicationsQuery);
 
         const fetchPatientComplicationsQuery = `SELECT * FROM patient_complications WHERE patient_id = ${lastInsertedId}`;
-        insertedPatient.patient_complications = await executeQuery(
+        const [patientComplications] = await executeQuery(
           fetchPatientComplicationsQuery
         );
+        insertedPatient.patient_complications = patientComplications;
+
+        const addPatientScanTimesQuery = `INSERT INTO patient_scan_times (patient_id)
+        VALUES (${lastInsertedId})`;
+        await executeQuery(addPatientScanTimesQuery);
+
+        const fetchPatientScanTimesQuery = `SELECT * FROM patient_scan_times where patient_id = ${lastInsertedId}`;
+        const [patientScanTimes] = await executeQuery(
+          fetchPatientScanTimesQuery
+        );
+        insertedPatient.patient_scan_times = patientScanTimes;
 
         // const savedPatient = await Patient.insertMany([patientData]);
         return res.status(200).json({ data: insertedPatient });
@@ -434,7 +445,7 @@ const getSinglePatient = async (req, res) => {
         return res.status(403).json(output);
       }
       patientId = parseInt(patientId);
-      const patientDetails = await getPatientDetails(patientId, headerUserId);
+      const patientDetails = await getPatientDetails(patientId);
       if (patientDetails == null) {
         const output = { data: { message: "Patient Not Found" } };
         return res.status(403).json(output);
@@ -454,7 +465,7 @@ const getSinglePatient = async (req, res) => {
 
 // const patientCheckedbyUse = (patientId, userId, patient_last_updated) => {};
 
-const getPatientDetails = async (patientID, userId) => {
+const getPatientDetails = async (patientID) => {
   // Get the information of the patient
   const [patient] = await executeQuery("SELECT * FROM Patients WHERE id = ?", [
     patientID,
@@ -492,6 +503,15 @@ const getPatientDetails = async (patientID, userId) => {
   );
 
   patient.patient_complications = patientComplicationsData;
+
+  const user_data_query = `select id as user_id, fullname, phone_number from usercollection where id=?`;
+  const user_data = await executeQuery(user_data_query, [patient.created_by]);
+  patient.user_data = user_data;
+  console.log(user_data);
+
+  const fetchPatientScanTimesQuery = `SELECT * FROM patient_scan_times where patient_id = ${patientID}`;
+  const [patientScanTimes] = await executeQuery(fetchPatientScanTimesQuery);
+  patient.patient_scan_times = patientScanTimes;
 
   // patient.created = new Date(patient.created * 1000).toLocaleString();
   // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
@@ -772,6 +792,7 @@ const updateBasicData = async (req, res) => {
           first_name = IFNULL(?, first_name), 
           last_name = IFNULL(?, last_name), 
           date_of_birth = IFNULL(?, date_of_birth), 
+          address = IFNULL(?, address), 
           age = IFNULL(?, age), 
           gender = IFNULL(?, gender), 
           contact_number = IFNULL(?, contact_number), 
@@ -814,6 +835,7 @@ const updateBasicData = async (req, res) => {
         patientBasicData.first_name || undefined,
         patientBasicData.last_name || undefined,
         patientBasicData.date_of_birth || undefined,
+        patientBasicData.address || undefined,
         patientBasicData.age || undefined,
         patientBasicData.gender || undefined,
         patientBasicData.contact_number || undefined,
@@ -898,13 +920,13 @@ const updateScanTimesofPatient = async (req, res) => {
         const patientScanTimes = {};
 
         if (data.ct_scan_time && data.ct_scan_time) {
-          patientScanTimes.ct_scan_time = data.ct_scan_time;
+          patientScanTimes.ct_scan_time = data.ct_scan_time.replace('T', ' ').substring(0, 19);
         }
         if (data.mr_mra_time && data.mr_mra_time) {
-          patientScanTimes.mr_mra_time = data.mr_mra_time;
+          patientScanTimes.mr_mra_time = data.mr_mra_time.replace('T', ' ').substring(0, 19);
         }
         if (data.dsa_time_completed && data.dsa_time_completed) {
-          patientScanTimes.dsa_time_completed = data.dsa_time_completed;
+          patientScanTimes.dsa_time_completed = data.dsa_time_completed.replace('T', ' ').substring(0, 19);
         }
         if (data.type_of_stroke && data.type_of_stroke) {
           patientScanTimes.type_of_stroke = data.type_of_stroke;
@@ -925,16 +947,52 @@ const updateScanTimesofPatient = async (req, res) => {
 
         patientScanTimes.last_updated = new Date().toISOString();
 
-        const updatePatientScanTimes = await Patient.findById(data.patient_id);
-        updatePatientScanTimes.patient_scan_times = patientScanTimes;
+        const updatePatientScanTimesQuery = `UPDATE patient_scan_times
+        SET 
+            ct_scan_time = IFNULL(?, ct_scan_time),
+            mr_mra_time = IFNULL(?, mr_mra_time),
+            dsa_time_completed = IFNULL(?, dsa_time_completed),
+            type_of_stroke = IFNULL(?, type_of_stroke),
+            lvo = IFNULL(?, lvo),
+            lvo_types = IFNULL(?, lvo_types),
+            lvo_site = IFNULL(?, lvo_site),
+            aspects = IFNULL(?, aspects),
+            last_updated = NOW()
+        WHERE patient_id = ?;
+        `;
 
-        updatePatientScanTimes.last_updated = Date.now();
-        updatePatientScanTimes.patient_basic_details.aspects = data.aspects;
+        const values = [
+          patientScanTimes.ct_scan_time,
+          patientScanTimes.mr_mra_time,
+          patientScanTimes.dsa_time_completed,
+          patientScanTimes.type_of_stroke,
+          patientScanTimes.lvo,
+          patientScanTimes.lvo_types,
+          patientScanTimes.lvo_site,
+          patientScanTimes.aspects,
+          data.patient_id,
+        ];
 
-        await updatePatientScanTimes.save();
+        await executeQuery(updatePatientScanTimesQuery, values);
+
+        const updatePatientApectsQuery = `
+          UPDATE patients
+          SET
+            aspects = IFNULL(?, aspects),
+            last_updated = NOW()
+          WHERE id = ?`;
+
+        await executeQuery(updatePatientApectsQuery,[patientScanTimes.aspects,data.patient_id]);
+        // const updatePatientScanTimes = await Patient.findById(data.patient_id);
+        // updatePatientScanTimes.patient_scan_times = patientScanTimes;
+
+        // updatePatientScanTimes.last_updated = Date.now();
+        // updatePatientScanTimes.patient_basic_details.aspects = data.aspects;
+
+        // await updatePatientScanTimes.save();
 
         // Update last_updated field in Patients collection
-        // const updatePatients = await db.collection('patienjts').updateOne(
+        // const updatePatients = await db.collection('patients').updateOne(
         //     { id: data.patient_id },
         //     {
         //         $set: {
@@ -1126,7 +1184,7 @@ const updatePatientComplications = async (req, res) => {
       WHERE patient_id = ?;      
 `;
 
-console.log(patientComplications);
+      console.log(patientComplications);
 
       const valuesComplications = [
         patientComplications.bed_sore || undefined,
@@ -1153,10 +1211,10 @@ console.log(patientComplications);
         patientComplications.others || undefined,
         patientComplications.others_information || undefined,
         patientComplications.others_duration || undefined,
-        data.patient_id
+        data.patient_id,
       ];
 
-      const rss = await executeQuery(updateQuery,valuesComplications);
+      const rss = await executeQuery(updateQuery, valuesComplications);
 
       console.log(rss);
       // patientComplications.last_updated = new Date().toISOString();
@@ -1694,4 +1752,5 @@ module.exports = {
   deletePatientFile,
   codeStrokeAlert,
   getHubSpokeCenters,
+  getPatientDetails,
 };
