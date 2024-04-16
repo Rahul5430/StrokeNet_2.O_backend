@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 const Patient = require("../models/PatientCollection");
 const Centers = require("../models/CentersCollection");
 const Page = require("../models/PageCollection");
@@ -26,33 +26,32 @@ const uploadFile = async (req, res) => {
       if (!req.file) {
         return res.status(400).send("No file uploaded.");
       }
-  
       const storage = admin.storage();
       const bucket = storage.bucket();
       const file = bucket.file(req.file.originalname);
-      
+
       // Create a write stream to upload file data
       const fileStream = file.createWriteStream({
         metadata: {
-          contentType: req.file.mimetype // Set the content type based on the uploaded file
-        }
+          contentType: req.file.mimetype, // Set the content type based on the uploaded file
+        },
       });
-  
+
       fileStream.on("error", (err) => {
         console.error("Error uploading file:", err);
         res.status(500).send("Error uploading file.");
       });
-  
-      fileStream.on("finish", () => {
-        // File upload complete
-        res.status(200).send("File uploaded successfully.");
-      });
-  
-      // Pipe the file data from req.file.buffer to Firebase Storage
-      fileStream.end(req.file.buffer);
 
-      const fileName = req.file?.filename;
-      res.status(200).json(fileName);
+      fileStream.on("finish", async() => {
+        // File upload complete
+        await file.makePublic();
+        res.status(200).send(req?.file?.originalname);
+      });
+
+      // // Pipe the file data from req.file.buffer to Firebase Storage
+      fileStream.end(req.file.buffer);
+      // const fileName = req.file?.originalname;
+      // res.status(200).json(fileName);
     } else {
       console.log("invalid cred");
       return res.status(403).json({ data: { message: "INVALID_CREDENTIALS" } });
@@ -567,6 +566,20 @@ const getPatientDetails = async (patientID) => {
   const [patientScanTimes] = await executeQuery(fetchPatientScanTimesQuery);
   patient.patient_scan_times = patientScanTimes;
 
+  const patientFilesQuery = `SELECT 
+    scan_type,
+    JSON_ARRAYAGG(JSON_OBJECT('file', file, 'file_type', file_type)) AS scan_files
+FROM 
+    patient_files
+WHERE 
+    patient_id = ?
+GROUP BY 
+    scan_type`;
+
+  const patientFilesData = await executeQuery(patientFilesQuery, [patientID]);
+  console.log(patientFilesData);
+  patient.patient_files = { ncct: [], cta_ctp: [], mri: [] };
+
   // patient.created = new Date(patient.created * 1000).toLocaleString();
   // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
 
@@ -883,7 +896,6 @@ const updateBasicData = async (req, res) => {
           id = ?;
   `;
 
-      // Replace null values with undefined to prevent them from being updated
       const values = [
         patientBasicData.name || undefined,
         patientBasicData.first_name || undefined,
@@ -974,13 +986,19 @@ const updateScanTimesofPatient = async (req, res) => {
         const patientScanTimes = {};
 
         if (data.ct_scan_time && data.ct_scan_time) {
-          patientScanTimes.ct_scan_time = data.ct_scan_time.replace('T', ' ').substring(0, 19);
+          patientScanTimes.ct_scan_time = data.ct_scan_time
+            .replace("T", " ")
+            .substring(0, 19);
         }
         if (data.mr_mra_time && data.mr_mra_time) {
-          patientScanTimes.mr_mra_time = data.mr_mra_time.replace('T', ' ').substring(0, 19);
+          patientScanTimes.mr_mra_time = data.mr_mra_time
+            .replace("T", " ")
+            .substring(0, 19);
         }
         if (data.dsa_time_completed && data.dsa_time_completed) {
-          patientScanTimes.dsa_time_completed = data.dsa_time_completed.replace('T', ' ').substring(0, 19);
+          patientScanTimes.dsa_time_completed = data.dsa_time_completed
+            .replace("T", " ")
+            .substring(0, 19);
         }
         if (data.type_of_stroke && data.type_of_stroke) {
           patientScanTimes.type_of_stroke = data.type_of_stroke;
@@ -1001,7 +1019,6 @@ const updateScanTimesofPatient = async (req, res) => {
 
         patientScanTimes.last_updated = new Date().toISOString();
 
-
         // Construct SQL query to update patient scan times
         const updateQuery = `
           UPDATE Patients
@@ -1011,7 +1028,12 @@ const updateScanTimesofPatient = async (req, res) => {
           WHERE id = ?
         `;
         const currentDate = new Date().toISOString();
-        await executeQuery(updateQuery, [JSON.stringify(patientScanTimes), currentDate, JSON.stringify(data.aspects), data.patient_id]);
+        await executeQuery(updateQuery, [
+          JSON.stringify(patientScanTimes),
+          currentDate,
+          JSON.stringify(data.aspects),
+          data.patient_id,
+        ]);
 
         const updatePatientScanTimesQuery = `UPDATE patient_scan_times
         SET 
@@ -1048,7 +1070,10 @@ const updateScanTimesofPatient = async (req, res) => {
             last_updated = NOW()
           WHERE id = ?`;
 
-        await executeQuery(updatePatientApectsQuery,[patientScanTimes.aspects,data.patient_id]);
+        await executeQuery(updatePatientApectsQuery, [
+          patientScanTimes.aspects,
+          data.patient_id,
+        ]);
         // const updatePatientScanTimes = await Patient.findById(data.patient_id);
         // updatePatientScanTimes.patient_scan_times = patientScanTimes;
 
@@ -1056,7 +1081,7 @@ const updateScanTimesofPatient = async (req, res) => {
         // updatePatientScanTimes.patient_basic_details.aspects = data.aspects;
 
         // await updatePatientScanTimes.save();
-        
+
         // Update last_updated field in Patients collection
         // const updatePatients = await db.collection('patients').updateOne(
         //     { id: data.patient_id },
@@ -1528,35 +1553,42 @@ const addPatientScanFile = async (req, res) => {
 
       // Fetch patient details
       const filedata = req.body;
-      const [patientFile] = await executeQuery(
-        "SELECT * FROM Patients WHERE id = ?",
+      console.log(filedata);
+      const [patient] = await executeQuery(
+        "SELECT * FROM patients WHERE id = ?",
         [filedata.patient_id]
       );
 
       // Insert new scan file
       const insertQuery = `
-        INSERT INTO patient_files (patient_id, file_type, file, user_role, created)
+        INSERT INTO patient_files (patient_id, file_type, file, user_id, scan_type)
         VALUES (?, ?, ?, ?, ?)
       `;
-      const currentDate = Date.now();
+
       const dataForDB = [
         filedata.patient_id,
         filedata.file_type,
         filedata.file,
-        user.user_role,
-        currentDate
+        user.id,
+        filedata.scan_type,
       ];
       await executeQuery(insertQuery, dataForDB);
 
-      // Update patient file details
-      const updateQuery = `
-        UPDATE Patients 
-        SET total_scans = total_scans + 1, last_updated = ?
-        WHERE id = ?
-      `;
-      await query(updateQuery, [currentDate, filedata.patient_id]);
+      // // Update patient file details
+      // const updateQuery = `
+      //   UPDATE patients
+      //   SET scans_uploaded = scans_uploaded + 1
+      //   WHERE id = ?
+      // `;
+      // await executeQuery(updateQuery, [filedata.patient_id]);
 
-      const output = { data: { file: dataForDB, message: "file_uploaded" } };
+      const resData = {
+        ...filedata,
+        user_role: user.user_role,
+        created: Date.now(),
+      };
+
+      const output = { data: { file: resData, message: "file_uploaded" } };
       res.status(200).json(output);
     } catch (err) {
       console.log(err);
@@ -1605,7 +1637,11 @@ const deletePatientFile = async (req, res) => {
               DELETE FROM patient_files
               WHERE patient_id = ? AND file = ? AND file_type = ?
             `;
-            await executeQuery(deleteQuery, [data.patient_id, data.file_id, data.scan_type]);
+            await executeQuery(deleteQuery, [
+              data.patient_id,
+              data.file_id,
+              data.scan_type,
+            ]);
 
             // Update patient's total_scans and last_updated fields
             const updateQuery = `

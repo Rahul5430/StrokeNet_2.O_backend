@@ -7,6 +7,7 @@ const {
   Conversation,
   UsersConversations,
 } = require("../models/ConversationCollection");
+const { getPatientDetails } = require("./PatientController");
 const nodemailer = require("nodemailer");
 
 const connectToSocket = (server) => {
