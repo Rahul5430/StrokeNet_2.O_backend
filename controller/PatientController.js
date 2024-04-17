@@ -1,8 +1,4 @@
 const admin = require("firebase-admin");
-const Patient = require("../models/PatientCollection");
-const Centers = require("../models/CentersCollection");
-const Page = require("../models/PageCollection");
-const User = require("../models/UserCollection");
 const { calculateAge, sendNotification } = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
@@ -45,6 +41,7 @@ const uploadFile = async (req, res) => {
       fileStream.on("finish", async() => {
         // File upload complete
         await file.makePublic();
+        console.log(req.file.originalname)
         res.status(200).send(req?.file?.originalname);
       });
 
@@ -567,18 +564,23 @@ const getPatientDetails = async (patientID) => {
   patient.patient_scan_times = patientScanTimes;
 
   const patientFilesQuery = `SELECT 
-    scan_type,
-    JSON_ARRAYAGG(JSON_OBJECT('file', file, 'file_type', file_type)) AS scan_files
+  pf.scan_type,
+  JSON_ARRAYAGG(JSON_OBJECT('file', pf.file, 'file_type', pf.file_type, 'user_role', u.user_role, 'created', pf.created)) AS scan_files
 FROM 
-    patient_files
+  patient_files pf
+JOIN 
+  UserCollection u ON pf.user_id = u.id
 WHERE 
-    patient_id = ?
+  pf.patient_id = ?
 GROUP BY 
-    scan_type`;
+  pf.scan_type`;
 
   const patientFilesData = await executeQuery(patientFilesQuery, [patientID]);
-  console.log(patientFilesData);
-  patient.patient_files = { ncct: [], cta_ctp: [], mri: [] };
+  patient.patient_files = { ncct: [], cta_ctp: [], mri: [], mra:[] };
+
+  patientFilesData.forEach((item)=>{
+    patient.patient_files[item?.scan_type] = item?.scan_files;
+  })
 
   // patient.created = new Date(patient.created * 1000).toLocaleString();
   // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();

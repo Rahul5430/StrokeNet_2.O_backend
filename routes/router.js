@@ -1,7 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/UserCollection");
-const path = require("path");
 const {
   getCenters,
   getHubs,

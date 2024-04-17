@@ -1,10 +1,3 @@
-const Centers = require("../models/CentersCollection");
-const Hubs = require("../models/HubsCollection");
-const User = require("../models/UserCollection");
-const {
-  Conversation,
-  UsersConversations,
-} = require("../models/ConversationCollection");
 const { ValidateUser } = require("./authController");
 const { executeQuery } = require("../config/sqlDatabase");
 

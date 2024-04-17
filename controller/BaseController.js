@@ -1,12 +1,6 @@
 const admin = require("firebase-admin");
-const Patient = require("../models/PatientCollection");
-const User = require("../models/UserCollection");
 const socketIo = require("socket.io");
 const {executeQuery} = require("../config/sqlDatabase");
-const {
-  Conversation,
-  UsersConversations,
-} = require("../models/ConversationCollection");
 const { getPatientDetails } = require("./PatientController");
 const nodemailer = require("nodemailer");
 
@@ -88,18 +82,6 @@ const connectToSocket = (server) => {
       socket.join(data.senderId);
       io.to(data.recieverId).emit("joined");
       io.to(data.recieverId).emit("messageSeen");
-      await Conversation.updateMany(
-        {
-          recieverId: data.senderId,
-          senderId: data.recieverId,
-          read_by_user: false,
-        },
-        {
-          $set: {
-            read_by_user: true,
-          },
-        }
-      );
       const number = io.sockets.adapter.rooms.get(data.recieverId);
       const num = number ? number.size : 0;
       if (num) {

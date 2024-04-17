@@ -1,7 +1,3 @@
-const Page = require("../models/PageCollection");
-const Centers = require("../models/CentersCollection");
-const User = require("../models/UserCollection");
-const Hubs = require("../models/HubsCollection");
 const { ValidateUser } = require("./authController");
 const { sendNotification, sendemail } = require("./BaseController");
 const {executeQuery} = require("../config/sqlDatabase");
@@ -100,7 +96,7 @@ const getCenters = async (req, res) => {
   //     created: "2019-03-18 15:05:13",
   //   },
   // ];
-  const centers = await Centers.find();
+  const centers = await executeQuery('Select * from centerscollection');
   res.status(200).send({ data: centers });
 };
 
@@ -133,7 +129,7 @@ const getHubs = async (req, res) => {
   //     created: "2019-03-18 15:05:13",
   //   },
   // ];
-  const hubs = await Hubs.find();
+  const hubs = await executeQuery('Select * from hubscollection');
   res.status(200).send({ data: hubs });
 };
 
@@ -247,7 +243,7 @@ const contactUs = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
 
   if (await ValidateUser(headerUserId, headerUserToken)) {
-    const admin = await User.find({ admin: true });
+    const admin = await executeQuery('SELECT * FROM usercollection WHERE admin=true');
     const data = req.body;
     if (admin[0] && admin[0].fcm_userid && admin[0].fcm_userid != "") {
       sendNotification(admin[0].fcm_userid, "contactUs", data);
