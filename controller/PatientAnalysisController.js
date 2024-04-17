@@ -1,3 +1,4 @@
+const { executeQuery } = require("../config/sqlDatabase");
 const Patient = require("../models/PatientCollection");
 const User = require("../models/UserCollection");
 const { ValidateUser } = require("./authController");
@@ -199,27 +200,34 @@ const postComment = async (req, res) => {
   const headerUserToken = req.headers.usertoken;
   if (ValidateUser(headerUserToken && headerUserId)) {
     const patientId = req.body.patientId;
-    const patient = await Patient.findById(patientId);
-    const user = await User.findById(headerUserId);
-    const comments = patient.comments;
+    const message = req.body.message;
+    await executeQuery(
+      `INSERT INTO comments (patient_id, user_id, message) VALUES (?, ?, ?)`,
+      [patientId, headerUserId, message]
+    );
+    // const patient = await Patient.findById(patientId);
+    const [user] = await executeQuery(
+      `SELECT u.id, u.fullname FROM usercollection AS u WHERE id=?`,
+      [headerUserId]
+    );
+
     const newMsg = {
-      message: req.body.message,
-      user_id: {
-        fullname: user.fullname,
-        user_id: user._id,
-      },
+      message: message,
+      fullname: user.fullname,
+      user_id: user.id,
       created: Date.now(),
     };
-    comments.push(newMsg);
-    patient.last_message = {
-      last_message: newMsg.message,
-      last_message_at: newMsg.created,
-      user: {
-        fullname: user.fullname,
-        user_role: user.user_role,
-      },
-    };
-    await patient.save();
+    console.log(newMsg);
+    // comments.push(newMsg);
+    // patient.last_message = {
+    //   last_message: newMsg.message,
+    //   last_message_at: newMsg.created,
+    //   user: {
+    //     fullname: user.fullname,
+    //     user_role: user.user_role,
+    //   },
+    // };
+    // await patient.save();
     res.status(200).send(newMsg);
   } else {
     res.send(403).status("hello");
@@ -232,8 +240,35 @@ const getComments = async (req, res) => {
   if (ValidateUser(headerUserToken && headerUserId)) {
     try {
       const patientId = req.params.PatientId;
-      const patient = await Patient.findById(patientId);
-      res.status(200).send({ data: patient.comments });
+      const patientComments = await executeQuery(
+        `SELECT 
+    u.fullname AS fullname,
+    u.id AS user_id,
+    c.*
+FROM 
+    comments c
+JOIN 
+    usercollection u ON c.user_id = u.id
+WHERE 
+    c.patient_id = ?
+ORDER BY 
+    c.created ASC;
+`,
+        [patientId]
+      );
+
+      // const formattedComments = patientComments.map(comment => {
+      //   return {
+      //     user_id: JSON.parse(comment.user_id),
+      //     id: comment.id,
+      //     patient_id: comment.patient_id,
+      //     message: comment.message,
+      //     created: comment.created
+      //   };
+      // });
+
+      console.log(patientComments);
+      res.status(200).send({ data: patientComments });
     } catch (err) {
       console.log(err);
       const output = { data: { message: "Something Went Wrong" } };
