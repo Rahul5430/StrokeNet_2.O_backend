@@ -1,7 +1,66 @@
 const { executeQuery } = require("../config/sqlDatabase");
-const Patient = require("../models/PatientCollection");
-const User = require("../models/UserCollection");
 const { ValidateUser } = require("./authController");
+const { updatePatientStatus } = require('./BaseController');
+
+async function fetchTransitionStatuses(patientId) {
+  try {
+      // Check if the patient is transitioned
+      const checkPatientTransitioned = await executeQuery(
+          `SELECT in_transition, is_spoke, is_hub FROM user_patients WHERE patient_id = ?`,
+          [patientId]
+      );
+
+      // Get punched statuses
+      const getPunchedStatuses = await executeQuery(
+          `SELECT * FROM transition_statuses_view WHERE patient_id = ? ORDER BY id DESC`,
+          [patientId]
+      );
+
+      // Format date and time fields for punched statuses
+      getPunchedStatuses.forEach(status => {
+          status.user_role = status.user_role.replace(/_/g, ' ').toUpperCase();
+          status.date = new Date(status.created).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+          status.time = new Date(status.created).toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
+      });
+
+      // Get all statuses from the status_types table
+      const getAllStatuses = await executeQuery(
+          `SELECT * FROM status_types ORDER BY position ASC`
+      );
+
+      // Organize statuses by location type and exclude punched statuses
+      const statusTypes = {};
+      getAllStatuses.forEach(status => {
+          if (!statusTypes[status.loc_type]) {
+              statusTypes[status.loc_type] = [];
+          }
+          statusTypes[status.loc_type].push(status);
+      });
+
+      // Filter available statuses based on patient's transition status
+      let availableStatuses = [];
+      if (checkPatientTransitioned[0].in_transition === '0' && checkPatientTransitioned[0].is_spoke === '1') {
+          availableStatuses = statusTypes['spoke'];
+      } else {
+          availableStatuses = statusTypes['hub'];
+      }
+
+      // Remove certain statuses from available statuses
+      const excludedStatuses = [25, 24, 17, 16, 15, 14];
+      availableStatuses = availableStatuses.filter(status => !excludedStatuses.includes(status.id));
+
+      // Prepare output array
+      const allStatuses = {
+          available: availableStatuses,
+          punched: getPunchedStatuses
+      };
+
+      return allStatuses;
+  } catch (error) {
+      console.error('Error fetching transition statuses:', error);
+      throw error; // Forward the error to the caller
+  }
+}
 
 const postTransitionStatus = async (req, res) => {
   const headerUserId = req.headers.userid;
@@ -27,7 +86,10 @@ const postTransitionStatus = async (req, res) => {
       //     user_id: headerUserId[0],
       //   });
 
-      const getUserCenterId = await User.findById(headerUserId);
+      const [getUserCenterId] = await executeQuery(
+        "SELECT center_id FROM usercollection WHERE id=?",
+        [headerUserId]
+      );
 
       const insertStatusData = {
         user_id: headerUserId,
@@ -37,156 +99,158 @@ const postTransitionStatus = async (req, res) => {
         created: new Date().toISOString(),
       };
 
-      const patient = await Patient.findById(data.patient_id);
-      patient.transition_statuses = insertStatusData;
-      patient.last_updated = Date.now();
+      const inserted = await executeQuery(
+        `INSERT INTO transition_statuses (user_id,patient_id,status_id,center_id,created) VALUES (?, ?, ?, ?, NOW())`,
+        [
+          insertStatusData.user_id,
+          insertStatusData.patient_id,
+          insertStatusData.status_id,
+          insertStatusData.center_id,
+        ]
+      );
+      if (inserted) {
+        await executeQuery(
+          `UPDATE patients SET last_updated = NOW() WHERE id = ?`,
+          [insertStatusData.patient_id]
+        );
+        //     this.ci.db.update(
+        //       "user_patients",
+        //       { last_updated: new Date().toISOString() },
+        //       { patient_id: data["patient_id"] }
+        //     );
 
-      await patient.save();
+        //     // Send message to all people about the status change
+        //     const getPatientNameCode = this.ci.db.get(
+        //       "patients",
+        //       ["name", "patient_code"],
+        //       { id: data["patient_id"] }
+        //     );
+        const getStatusInfo = await executeQuery(
+          `SELECT title from status_types WHERE id=?`,
+          [data["status_id"]]
+        );
 
-      //   const insertStatus = this.ci.db.insert(
-      //     "transition_statuses",
-      //     insertStatusData
-      //   );
+        //     const getPushIDs = getOneSignalIdsOfTheRadioWithoutDiagnosisUsers(
+        //       data["patient_id"]
+        //     );
 
-      //   if (insertStatus) {
-      //     // Update Last Updated
-      //     this.ci.db.update(
-      //       "patients",
-      //       { last_updated: new Date().toISOString() },
-      //       { id: data["patient_id"] }
-      //     );
-      //     this.ci.db.update(
-      //       "user_patients",
-      //       { last_updated: new Date().toISOString() },
-      //       { patient_id: data["patient_id"] }
-      //     );
+        //     if (getPushIDs.pushIDs.length > 0) {
+        //       const pushData = {
+        //         title:
+        //           "Status Changed: " +
+        //           getPatientNameCode.name +
+        //           "(" +
+        //           getPatientNameCode.patient_code +
+        //           ")",
+        //         message:
+        //           data["status_id"] === "3" ||
+        //           data["status_id"] === "5" ||
+        //           data["status_id"] === "20"
+        //             ? "Patient is being shifted to CT."
+        //             : "Status has been changed to: " + getStatusInfo.title,
+        //         url:
+        //           "snetchd://strokenetchandigarh.com/patient_detail/" +
+        //           data["patient_id"],
+        //         devices: getPushIDs.pushIDs,
+        //       };
 
-      //     // Send message to all people about the status change
-      //     const getPatientNameCode = this.ci.db.get(
-      //       "patients",
-      //       ["name", "patient_code"],
-      //       { id: data["patient_id"] }
-      //     );
-      //     const getStatusInfo = this.ci.db.get("status_types", ["title"], {
-      //       id: data["status_id"],
-      //     });
+        //       sendPush(pushData);
 
-      //     const getPushIDs = getOneSignalIdsOfTheRadioWithoutDiagnosisUsers(
-      //       data["patient_id"]
-      //     );
+        //       // Send SMS (Code for sending SMS is commented out)
+        //       /*
+        //         const phoneNumbers = getPushIDs.mobileNumbers.map(phoneNumber => "+91" + phoneNumber);
+        //         const smsData = {
+        //             to: phoneNumbers.join("<"),
+        //             message: `Status Changed: ${getPatientNameCode.name} (${getPatientNameCode.patient_code}). ${data['status_id'] === "3" || data['status_id'] === "5" || data['status_id'] === "20" ?
+        //               "Patient is being shifted to CT." :
+        //               "Status has been changed to: " + getStatusInfo.title}`,
+        //         };
+        //         sendSMS(smsData);
+        //         */
+        //     }
 
-      //     if (getPushIDs.pushIDs.length > 0) {
-      //       const pushData = {
-      //         title:
-      //           "Status Changed: " +
-      //           getPatientNameCode.name +
-      //           "(" +
-      //           getPatientNameCode.patient_code +
-      //           ")",
-      //         message:
-      //           data["status_id"] === "3" ||
-      //           data["status_id"] === "5" ||
-      //           data["status_id"] === "20"
-      //             ? "Patient is being shifted to CT."
-      //             : "Status has been changed to: " + getStatusInfo.title,
-      //         url:
-      //           "snetchd://strokenetchandigarh.com/patient_detail/" +
-      //           data["patient_id"],
-      //         devices: getPushIDs.pushIDs,
-      //       };
+        //     // If status = 3 or 5 (Shift to CT), send push notification to Radiology People
+        if (
+          data["status_id"] === "3" ||
+          data["status_id"] === "5" ||
+          data["status_id"] === "20"
+        ) {
+          const getRadioPushIDs = getOneSignalIdsOfTheRadioDiagnosisUsers(
+            data["patient_id"]
+          );
 
-      //       sendPush(pushData);
+          //       if (getRadioPushIDs.pushIDs.length > 0) {
+          //         const pushData = {
+          //           title: "Acute Stroke arriving for CT",
+          //           message: `Patient (${getPatientNameCode.name}) is being shifted to CT.`,
+          //           url:
+          //             "snetchd://strokenetchandigarh.com/patient_detail/" +
+          //             data["patient_id"],
+          //           devices: getRadioPushIDs.pushIDs,
+          //         };
 
-      //       // Send SMS (Code for sending SMS is commented out)
-      //       /*
-      //         const phoneNumbers = getPushIDs.mobileNumbers.map(phoneNumber => "+91" + phoneNumber);
-      //         const smsData = {
-      //             to: phoneNumbers.join("<"),
-      //             message: `Status Changed: ${getPatientNameCode.name} (${getPatientNameCode.patient_code}). ${data['status_id'] === "3" || data['status_id'] === "5" || data['status_id'] === "20" ?
-      //               "Patient is being shifted to CT." :
-      //               "Status has been changed to: " + getStatusInfo.title}`,
-      //         };
-      //         sendSMS(smsData);
-      //         */
-      //     }
+          //         sendPush(pushData);
 
-      //     // If status = 3 or 5 (Shift to CT), send push notification to Radiology People
-      //     if (
-      //       data["status_id"] === "3" ||
-      //       data["status_id"] === "5" ||
-      //       data["status_id"] === "20"
-      //     ) {
-      //       const getRadioPushIDs = getOneSignalIdsOfTheRadioDiagnosisUsers(
-      //         data["patient_id"]
-      //       );
+          //         // Send SMS (Code for sending SMS is commented out)
+          //         /*
+          //           const phoneRNumbers = getRadioPushIDs.mobileNumbers.map(phoneNumber => "+91" + phoneNumber);
+          //           const smsData = {
+          //               to: phoneRNumbers.join("<"),
+          //               message: `Acute Stroke arriving for CT. Patient (${getPatientNameCode.name}) is being shifted to CT.`,
+          //           };
+          //           sendSMS(smsData);
+          //           */
 
-      //       if (getRadioPushIDs.pushIDs.length > 0) {
-      //         const pushData = {
-      //           title: "Acute Stroke arriving for CT",
-      //           message: `Patient (${getPatientNameCode.name}) is being shifted to CT.`,
-      //           url:
-      //             "snetchd://strokenetchandigarh.com/patient_detail/" +
-      //             data["patient_id"],
-      //           devices: getRadioPushIDs.pushIDs,
-      //         };
+          //         // Update patients table scans_needed = 1
+          // this.ci.db.update(
+          //   "patients",
+          //   { scans_needed: "1", last_updated: new Date().toISOString() },
+          //   { id: data["patient_id"] }
+          // );
+          await executeQuery(
+            `UPDATE patients SET scans_needed=?,last_updated=NOW() WHERE id=?`,
+            [data["patient_id"]]
+          );
+          //         this.ci.db.update(
+          //           "user_patients",
+          //           { last_updated: new Date().toISOString() },
+          //           { patient_id: data["patient_id"] }
+          //         );
+          //       }
+          //     }
 
-      //         sendPush(pushData);
+          //     // Global Status
+              const updateData = {
+                user_id: headerUserId[0],
+                patient_id: data["patient_id"],
+                update_type: "status_update",
+                url:
+                  "snetchd://strokenetchandigarh.com/patient_analysis/" +
+                  data["patient_id"] +
+                  "/status",
+                last_updated: new Date().toISOString(), 
+              }
+              updatePatientStatus(updateData);
+          // Global Status
+        }
 
-      //         // Send SMS (Code for sending SMS is commented out)
-      //         /*
-      //           const phoneRNumbers = getRadioPushIDs.mobileNumbers.map(phoneNumber => "+91" + phoneNumber);
-      //           const smsData = {
-      //               to: phoneRNumbers.join("<"),
-      //               message: `Acute Stroke arriving for CT. Patient (${getPatientNameCode.name}) is being shifted to CT.`,
-      //           };
-      //           sendSMS(smsData);
-      //           */
+        const output = {
+          data: {
+            message: "Status was updated successfully.",
+            transition_statuses: fetchTransitionStatuses(data["patient_id"]),
+          },
+        };
 
-      //         // Update patients table scans_needed = 1
-      //         this.ci.db.update(
-      //           "patients",
-      //           { scans_needed: "1", last_updated: new Date().toISOString() },
-      //           { id: data["patient_id"] }
-      //         );
-      //         this.ci.db.update(
-      //           "user_patients",
-      //           { last_updated: new Date().toISOString() },
-      //           { patient_id: data["patient_id"] }
-      //         );
-      //       }
-      //     }
-
-      //     // Global Status
-      //     const updateData = {
-      //       user_id: headerUserId[0],
-      //       patient_id: data["patient_id"],
-      //       update_type: "status_update",
-      //       url:
-      //         "snetchd://strokenetchandigarh.com/patient_analysis/" +
-      //         data["patient_id"] +
-      //         "/status",
-      //       last_updated: new Date().toISOString(),
-      //     };
-
-      //     updatePatientStatus(updateData);
-      // Global Status
-
-      const output = {
-        data: {
-          message: "Status was updated successfully.",
-          // transition_statuses: fetchTransitionStatuses(data["patient_id"]),
-        },
-      };
-
-      return res.status(200).json(output);
+        return res.status(200).json(output);
+      } else {
+        const output = {
+          data: {
+            message: "Problem posting your status. Please try again.",
+          },
+        };
+        return res.status(400).json(output);
+      }
     }
-    //  else {
-    //     const output ={data: {
-    //       message: "Problem posting your status. Please try again.",
-    //     }};
-    //     return res.json(output, 400);
-    //   }
-    // }
   } else {
     const output = {
       data: { message: "INVALID_CREDENTIALS" },

@@ -1,10 +1,11 @@
 const admin = require("firebase-admin");
-const { calculateAge, sendNotification } = require("./BaseController");
+const { calculateAge, sendNotification, getPatientDetails } = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
 const { ValidateUser } = require("./authController");
 const { v4: uuidv4 } = require("uuid");
 const { executeQuery } = require("../config/sqlDatabase");
+const moment = require("moment");
 
 // Initialize Firebase Storage
 // const storage = new Storage({
@@ -38,10 +39,10 @@ const uploadFile = async (req, res) => {
         res.status(500).send("Error uploading file.");
       });
 
-      fileStream.on("finish", async() => {
+      fileStream.on("finish", async () => {
         // File upload complete
         await file.makePublic();
-        console.log(req.file.originalname)
+        console.log(req.file.originalname);
         res.status(200).send(req?.file?.originalname);
       });
 
@@ -197,7 +198,24 @@ const addPatient = async (req, res) => {
         patientData.center_id = center_id;
 
         // patientData.datetime_of_stroke = formatDate(data.datetime_of_stroke);
+        console.log(data.datetime_of_stroke);
+        let removeT = data.datetime_of_stroke.replace("T", " ");
+        let removeZ = removeT.replace("Z", " ");
+        let datetime_of_stroke = removeZ;
 
+        // Adding 4.5 hours to datetime_of_stroke
+        let datetime_of_stroke_timeends = moment(datetime_of_stroke)
+          .add(4.5, "hours")
+          .format("YYYY-MM-DD HH:mm:ss");
+
+        let created = new Date().toISOString();
+        let admission_time = new Date().toISOString().replace("T", " ").replace("Z"," ");
+        patientData.admission_time = admission_time;
+
+        // Adding 45 minutes to created
+        let datetime_of_stroke_fortyfive_deadline = moment(created)
+          .add(45, "minutes")
+          .format("YYYY-MM-DD HH:mm:ss");
         // More data assignments...
         delete patientData.nihss_admission;
         console.log(patientData);
@@ -214,8 +232,11 @@ const addPatient = async (req, res) => {
           created_by,
           last_updated,
           created,
-          center_id
-      ) VALUES (?, ?, ?, ?, ?, IFNULL(?, gender), ?, ?, ?, ?, ?, ?, ?)`;
+          center_id,
+          admission_time,
+          datetime_of_stroke_timeends,
+          datetime_of_stroke_fortyfive_deadline
+      ) VALUES (?, ?, ?, ?, ?, IFNULL(?, gender), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
         await executeQuery(addPatientQuery, [
           patientData.datetime_of_stroke,
@@ -231,6 +252,9 @@ const addPatient = async (req, res) => {
           patientData.last_updated,
           patientData.created,
           patientData.center_id,
+          patientData.admission_time,
+          datetime_of_stroke_timeends,
+          datetime_of_stroke_fortyfive_deadline
         ]);
 
         const lastInsertedIdQuery = `SELECT LAST_INSERT_ID() as lastInsertId`;
@@ -303,6 +327,10 @@ const addPatient = async (req, res) => {
           fetchPatientScanTimesQuery
         );
         insertedPatient.patient_scan_times = patientScanTimes;
+
+        await executeQuery('INSERT INTO patient_presentation (patient_id) VALUES (?)',[lastInsertedId]);
+        await executeQuery('INSERT INTO patient_contradictions (patient_id) VALUES (?)',[lastInsertedId]);
+        await executeQuery('INSERT INTO patient_ivt_medications (patient_id) VALUES (?)',[lastInsertedId]);
 
         // const savedPatient = await Patient.insertMany([patientData]);
         return res.status(200).json({ data: insertedPatient });
@@ -511,184 +539,6 @@ const getSinglePatient = async (req, res) => {
     const output = { data: { message: "INVALID_CREDENTIALS" } };
     res.status(403).json(output);
   }
-};
-
-// const patientCheckedbyUse = (patientId, userId, patient_last_updated) => {};
-
-const getPatientDetails = async (patientID) => {
-  // Get the information of the patient
-  const [patient] = await executeQuery("SELECT * FROM Patients WHERE id = ?", [
-    patientID,
-  ]);
-  if (!patient) {
-    return null;
-  }
-  const fetchPatientNihss = `SELECT nihss_time, nihss_value, nihss_options FROM patient_nihss WHERE patient_id = ${patientID}`;
-  // Extract the inserted patient object
-  const patientNihssData = await executeQuery(fetchPatientNihss);
-
-  patient.patient_nihss = {};
-
-  patientNihssData.forEach((row) => {
-    patient.patient_nihss[row.nihss_time] = {
-      nihss_value: row.nihss_value,
-      nihss_options: row.nihss_options || "",
-    };
-  });
-
-  const fetchPatientMrs = `SELECT mrs_time, mrs_points, mrs_options FROM patient_mrs WHERE patient_id = ${patientID}`;
-  // Extract the inserted patient object
-  const patientMrsData = await executeQuery(fetchPatientMrs);
-  patient.patient_mrs = {};
-  patientMrsData.forEach((row) => {
-    patient.patient_mrs[row.mrs_time] = {
-      mrs_points: row.mrs_points,
-      mrs_options: row.mrs_options || "",
-    };
-  });
-
-  const fetchPatientComplicationsQuery = `SELECT * FROM patient_complications WHERE patient_id = ${patientID}`;
-  const [patientComplicationsData] = await executeQuery(
-    fetchPatientComplicationsQuery
-  );
-
-  patient.patient_complications = patientComplicationsData;
-
-  const user_data_query = `select id as user_id, fullname, phone_number from usercollection where id=?`;
-  const user_data = await executeQuery(user_data_query, [patient.created_by]);
-  patient.user_data = user_data;
-  console.log(user_data);
-
-  const fetchPatientScanTimesQuery = `SELECT * FROM patient_scan_times where patient_id = ${patientID}`;
-  const [patientScanTimes] = await executeQuery(fetchPatientScanTimesQuery);
-  patient.patient_scan_times = patientScanTimes;
-
-  const patientFilesQuery = `SELECT 
-  pf.scan_type,
-  JSON_ARRAYAGG(JSON_OBJECT('file', pf.file, 'file_type', pf.file_type, 'user_role', u.user_role, 'created', pf.created)) AS scan_files
-FROM 
-  patient_files pf
-JOIN 
-  UserCollection u ON pf.user_id = u.id
-WHERE 
-  pf.patient_id = ?
-GROUP BY 
-  pf.scan_type`;
-
-  const patientFilesData = await executeQuery(patientFilesQuery, [patientID]);
-  patient.patient_files = { ncct: [], cta_ctp: [], mri: [], mra:[] };
-
-  patientFilesData.forEach((item)=>{
-    patient.patient_files[item?.scan_type] = item?.scan_files;
-  })
-
-  // patient.created = new Date(patient.created * 1000).toLocaleString();
-  // patient.datetime_of_stroke_formatted = new Date(patient.datetime_of_stroke * 1000).toLocaleString();
-
-  // patient.show_original_name="yes";
-  // patient.admission_time_formatted="yes";
-
-  // // Check if patient information checked already
-  // patient.patient_checked = await this.patientCheckedbyUser(patient.id, userId, patient.last_updated);
-  // patient.last_update = await this.ci.db.get("patient_updates", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
-  // if (patient.last_update && patient.last_update.id) {
-  //     patient.last_update.user_id = this.getUserDetailsBasic(patient.last_update.user_id);
-  // }
-
-  // patient.last_message = await this.getLastMessageFromPatientConversations(userId, patientID);
-
-  // // Calculate Age of the patient
-  // const today = new Date();
-  // const dateOfBirth = new Date(patient.date_of_birth);
-  // const ageDiff = Math.abs(today - dateOfBirth);
-  // patient.age = Math.floor(ageDiff / (1000 * 60 * 60 * 24 * 365.25));
-
-  // const datetimeStrokeStarts = new Date(patient.datetime_of_stroke).getTime();
-  // const datetimeStrokeEnds = new Date(patient.datetime_of_stroke_timeends).getTime();
-  // const currentTime = new Date().getTime();
-
-  // if (currentTime > datetimeStrokeStarts) {
-  //     patient.show_increment_timer = true;
-  // }
-
-  // const getPatientTransitionStatusesOfEntry = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 1 OR status_id = 2 OR status_id = 19) ORDER BY id DESC LIMIT 1");
-  // for (let key in getPatientTransitionStatusesOfEntry) {
-  //     if (typeof getPatientTransitionStatusesOfEntry[key] === "object") {
-  //         delete getPatientTransitionStatusesOfEntry[key];
-  //     }
-  // }
-  // if (getPatientTransitionStatusesOfEntry.length > 0) {
-  //     const fortyfiveminsStart = new Date(getPatientTransitionStatusesOfEntry[0].created).getTime();
-  //     const fortyfiveminsEnds = new Date(fortyfiveminsStart + 45 * 60 * 1000).toLocaleString();
-  //     if (currentTime > fortyfiveminsStart && currentTime < new Date(fortyfiveminsEnds).getTime()) {
-  //         patient.show_decrement_timer = true;
-  //         patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
-  //     } else {
-  //         patient.show_decrement_timer = false;
-  //         patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
-  //     }
-  // }
-
-  // // Hide Decrement timer if TFSO is more than 4.5 hours
-  // const checkTFSO = new Date(new Date(patient.datetime_of_stroke).getTime() + 4.5 * 60 * 60 * 1000).toLocaleString();
-  // if (datetimeStrokeStarts > currentTime) {
-  //     patient.show_decrement_timer = false;
-  // }
-
-  // // Stop all timers if any of the status is available: IVT and MT ineligible, or Clock is stopped
-  // const getPatientTransitionStatusesOfEntryForStoppingClock = await this.ci.db.query("SELECT created, id, status_id, title FROM `transition_statuses_view` WHERE patient_id = " + patientID + " AND (status_id = 11 OR status_id = 16 OR status_id = 17 OR status_id = 23 OR status_id = 25) ORDER BY id DESC LIMIT 1");
-  // for (let key in getPatientTransitionStatusesOfEntryForStoppingClock) {
-  //     if (typeof getPatientTransitionStatusesOfEntryForStoppingClock[key] === "object") {
-  //         delete getPatientTransitionStatusesOfEntryForStoppingClock[key];
-  //     }
-  // }
-
-  // if (getPatientTransitionStatusesOfEntryForStoppingClock.length > 0) {
-  //     const clockedStoppedat = new Date(getPatientTransitionStatusesOfEntryForStoppingClock[0].created);
-  //     const dateA = new Date(patient.datetime_of_stroke);
-  //     const dateB = new Date(clockedStoppedat);
-  //     const interval = new Date(dateA - dateB);
-
-  //     const dateArray = [];
-  //     if (interval.getUTCDate() > 0) {
-  //         dateArray.push(interval.getUTCDate() + "d");
-  //     }
-  //     if (interval.getUTCHours() > 0) {
-  //         dateArray.push(interval.getUTCHours() + "h");
-  //     }
-  //     if (interval.getUTCMinutes() > 0) {
-  //         dateArray.push(interval.getUTCMinutes() + "m");
-  //     }
-  //     if (interval.getUTCSeconds() > 0) {
-  //         dateArray.push(interval.getUTCSeconds() + "s");
-  //     }
-  //     patient.show_increment_timer = false;
-  //     patient.show_tfso_total_time_message_box = true;
-  //     patient.show_total_time_taken_from_entry = dateArray.join(" : ");
-
-  //     // Needle Time Clock
-  //     const getPatientIVTTimes = this.ci.db.get("patient_ivt_times", "*", { "patient_id": patientID }, { "ORDER": { "id": "DESC" } });
-  //     if (getPatientIVTTimes && getPatientIVTTimes.id) {
-  //         patient.needle_time_at_stroke_entry = new Date(patient.datetime_of_stroke).getTime();
-  //         patient.needle_time_total_time = new Date(getPatientIVTTimes.datetime_of_stroke + getPatientIVTTimes.time * 1000);
-  //     } else {
-  //         patient.needle_time_at_stroke_entry = null;
-  //         patient.needle_time_total_time = null;
-  //     }
-
-  // } else {
-  //     patient.show_tfso_total_time_message_box = false;
-  // }
-
-  // // nitin formatted date
-  // patient.datetime_of_stroke = FormattedDate(patient.datetime_of_stroke);
-  // patient.patient_basic_details.admission_time = FormattedDate(
-  //   patient.patient_basic_details.admission_time
-  // );
-  // patient.patient_scan_times.ct_scan_time=FormattedDate(patient.patient_scan_times.ct_scan_time);
-  // patient.patient_scan_times.mr_mra_time=FormattedDate(patient.patient_scan_times.mr_mra_time);
-  // patient.patient_scan_times.mr_scan_time=FormattedDate(patient.patient_scan_times.mr_scan_time)
-  return patient;
 };
 
 const updateBasicData = async (req, res) => {
@@ -944,15 +794,15 @@ const updateBasicData = async (req, res) => {
 
       //   // ci.db.update("user_patients", { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
 
-      //   // const updateData = {
-      //   //     user_id: headerUserId[0],
-      //   //     patient_id: data.patient_id,
-      //   //     update_type: "basic_details",
-      //   //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
-      //   //     last_updated: new Date().toISOString(),
-      //   // };
+        // const updateData = {
+        //     user_id: headerUserId[0],
+        //     patient_id: data.patient_id,
+        //     update_type: "basic_details",
+        //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+        //     last_updated: new Date().toISOString(),
+        // };
 
-      //   // updatePatientStatus(updateData);
+        // updatePatientStatus(updateData);
 
       const output = {
         data: "Basic Details updates successfully.",
@@ -1019,23 +869,7 @@ const updateScanTimesofPatient = async (req, res) => {
           patientScanTimes.aspects = data.aspects;
         }
 
-        patientScanTimes.last_updated = new Date().toISOString();
-
-        // Construct SQL query to update patient scan times
-        const updateQuery = `
-          UPDATE Patients
-          SET patient_scan_times = ?,
-              last_updated = ?,
-              patient_basic_details = JSON_SET(patient_basic_details, '$.aspects', ?)
-          WHERE id = ?
-        `;
-        const currentDate = new Date().toISOString();
-        await executeQuery(updateQuery, [
-          JSON.stringify(patientScanTimes),
-          currentDate,
-          JSON.stringify(data.aspects),
-          data.patient_id,
-        ]);
+        patientScanTimes.last_updated = new Date().toISOString().replace("T"," ").replace("Z"," ");
 
         const updatePatientScanTimesQuery = `UPDATE patient_scan_times
         SET 
