@@ -1,9 +1,12 @@
 const admin = require("firebase-admin");
-const { calculateAge, sendNotification, getPatientDetails } = require("./BaseController");
+const {
+  calculateAge,
+  sendNotification,
+  patientCheckedbyUser,
+} = require("./BaseController");
 const fs = require("fs");
 const path = require("path");
 const { ValidateUser } = require("./authController");
-const { v4: uuidv4 } = require("uuid");
 const { executeQuery } = require("../config/sqlDatabase");
 const moment = require("moment");
 
@@ -59,6 +62,254 @@ const uploadFile = async (req, res) => {
     return res.status(500).json({ data: { message: "An error occurred" } });
   }
 };
+
+async function getPatientCalculatedTimes(patientId) {
+  const finalTimeArray = {};
+
+  // Assuming executeQuery is an asynchronous function that uses Promises
+  const getPatientTableTimes = await executeQuery(
+    `SELECT admission_time, datetime_of_stroke FROM patients WHERE id = ?`,
+    [patientId]
+  );
+  const patientTableTimes = getPatientTableTimes[0]; // Assuming the result is an array of rows
+  finalTimeArray["admission_time"] = patientTableTimes.admission_time;
+  finalTimeArray["datetime_of_stroke"] = patientTableTimes.datetime_of_stroke;
+
+  const getPatientScanTimes = await executeQuery(
+    `SELECT ct_scan_time, mr_mra_time, dsa_time_completed FROM patient_scan_times WHERE patient_id = ?`,
+    [patientId]
+  );
+  const patientScanTimes = getPatientScanTimes[0];
+  finalTimeArray["ct_scan_time"] = patientScanTimes.ct_scan_time;
+
+  const getPatientIVTTimes = await executeQuery(
+    `SELECT door_to_needle_time FROM patient_ivt_medications WHERE patient_id = ?`,
+    [patientId]
+  );
+  const patientIVTTimes = getPatientIVTTimes[0];
+  finalTimeArray["door_to_needle_time"] = patientIVTTimes.door_to_needle_time;
+
+  const getPatientHubMTStartedTime = await executeQuery(
+    `SELECT created FROM transition_statuses WHERE patient_id = ? AND status_id = '6'`,
+    [patientId]
+  );
+  finalTimeArray["mt_started_time"] = getPatientHubMTStartedTime[0]
+    ? getPatientHubMTStartedTime[0].created
+    : null;
+
+  const getPatientHubMTCompletedTime = await executeQuery(
+    `SELECT created FROM transition_statuses WHERE patient_id = ? AND status_id = '18'`,
+    [patientId]
+  );
+  finalTimeArray["mt_completed_time"] = getPatientHubMTCompletedTime[0]
+    ? getPatientHubMTCompletedTime[0].created
+    : null;
+
+  const calculatedTimes = {
+    tfso_time: calculateTimeBetweenTwoTimes(
+      finalTimeArray["datetime_of_stroke"],
+      finalTimeArray["admission_time"]
+    ),
+    door_to_ct_time: finalTimeArray["ct_scan_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["ct_scan_time"]
+        )
+      : null,
+    door_to_needle_time: finalTimeArray["door_to_needle_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["door_to_needle_time"]
+        )
+      : null,
+    door_to_groin_puncture: finalTimeArray["mt_started_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["mt_started_time"]
+        )
+      : null,
+    ct_to_groin_puncture:
+      finalTimeArray["mt_started_time"] && finalTimeArray["ct_scan_time"]
+        ? calculateTimeBetweenTwoTimes(
+            finalTimeArray["ct_scan_time"],
+            finalTimeArray["mt_started_time"]
+          )
+        : null,
+    door_to_hub_mt_completed: finalTimeArray["mt_completed_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["mt_completed_time"]
+        )
+      : null,
+  };
+
+  return {
+    times: finalTimeArray,
+    calculated: calculatedTimes,
+  };
+}
+
+const calculateBulkPatientTimings = async (req, res) => {
+  const headerUserId = req.headers["userId"];
+  const headerUserToken = req.headers["userToken"];
+
+  if (validateUser(headerUserId, headerUserToken)) {
+    const { patientType, timePeriod } = req.params;
+    let dateStart = "";
+    let dateEnd = "";
+
+    switch (timePeriod) {
+      case "past_one_week":
+        dateEnd = new Date().toISOString().split("T")[0];
+        dateStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        break;
+      case "past_one_month":
+        dateEnd = new Date().toISOString().split("T")[0];
+        dateStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        break;
+      case "past_six_months":
+        dateEnd = new Date().toISOString().split("T")[0];
+        dateStart = new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        break;
+      case "past_one_year":
+        dateEnd = new Date().toISOString().split("T")[0];
+        dateStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        break;
+    }
+
+    let getPatientsQuery = "";
+    if (patientType === "ischemic") {
+      getPatientsQuery = `SELECT DISTINCT(patient_id) FROM patient_scan_times WHERE type_of_stroke = 'Ischemic' AND DATE(last_updated) BETWEEN '${dateStart}' AND '${dateEnd}'`;
+    } else if (patientType === "ivt_bolus") {
+      getPatientsQuery = `SELECT DISTINCT(patient_id) FROM transition_statuses WHERE status_id IN ('10', '9', '22') AND DATE(created) BETWEEN '${dateStart}' AND '${dateEnd}'`;
+    } else {
+      getPatientsQuery = `SELECT DISTINCT(patient_id) FROM transition_statuses WHERE status_id IN ('1', '2', '19') AND DATE(created) BETWEEN '${dateStart}' AND '${dateEnd}'`;
+    }
+
+    try {
+      const getPatientIds = await pool.query(getPatientsQuery);
+      let finalTimes = {
+        tfso_time: [],
+        door_to_ct_time: [],
+        door_to_needle_time: [],
+        door_to_groin_puncture: [],
+        ct_to_groin_puncture: [],
+        door_to_hub_mt_completed: [],
+      };
+      let totalPatients = 0;
+
+      for (const patientId of getPatientIds.rows) {
+        const getPatient = await pool.query(
+          `SELECT id FROM patients WHERE id = $1`,
+          [patientId.patient_id]
+        );
+
+        if (getPatient.rows.length > 0) {
+          totalPatients++;
+
+          const getPatientTimes = await getPatientCalculatedTimes(
+            patientId.patient_id
+          );
+          const times = getPatientTimes.calculated;
+
+          if (times.tfso_time)
+            finalTimes.tfso_time.push(times.tfso_time.time_in_seconds);
+          if (times.door_to_ct_time)
+            finalTimes.door_to_ct_time.push(
+              times.door_to_ct_time.time_in_seconds
+            );
+          if (times.door_to_needle_time)
+            finalTimes.door_to_needle_time.push(
+              times.door_to_needle_time.time_in_seconds
+            );
+          if (times.door_to_groin_puncture)
+            finalTimes.door_to_groin_puncture.push(
+              times.door_to_groin_puncture.time_in_seconds
+            );
+          if (times.ct_to_groin_puncture)
+            finalTimes.ct_to_groin_puncture.push(
+              times.ct_to_groin_puncture.time_in_seconds
+            );
+          if (times.door_to_hub_mt_completed)
+            finalTimes.door_to_hub_mt_completed.push(
+              times.door_to_hub_mt_completed.time_in_seconds
+            );
+        }
+      }
+
+      let averages = {};
+      if (finalTimes.tfso_time.length > 0)
+        averages.tfso_time = Math.floor(
+          finalTimes.tfso_time.reduce((acc, curr) => acc + curr) /
+            finalTimes.tfso_time.length
+        );
+      if (finalTimes.door_to_ct_time.length > 0)
+        averages.door_to_ct_time = Math.floor(
+          finalTimes.door_to_ct_time.reduce((acc, curr) => acc + curr) /
+            finalTimes.door_to_ct_time.length
+        );
+      if (finalTimes.door_to_needle_time.length > 0)
+        averages.door_to_needle_time = Math.floor(
+          finalTimes.door_to_needle_time.reduce((acc, curr) => acc + curr) /
+            finalTimes.door_to_needle_time.length
+        );
+      if (finalTimes.door_to_groin_puncture.length > 0)
+        averages.door_to_groin_puncture = Math.floor(
+          finalTimes.door_to_groin_puncture.reduce((acc, curr) => acc + curr) /
+            finalTimes.door_to_groin_puncture.length
+        );
+      if (finalTimes.ct_to_groin_puncture.length > 0)
+        averages.ct_to_groin_puncture = Math.floor(
+          finalTimes.ct_to_groin_puncture.reduce((acc, curr) => acc + curr) /
+            finalTimes.ct_to_groin_puncture.length
+        );
+      if (finalTimes.door_to_hub_mt_completed.length > 0)
+        averages.door_to_hub_mt_completed = Math.floor(
+          finalTimes.door_to_hub_mt_completed.reduce(
+            (acc, curr) => acc + curr
+          ) / finalTimes.door_to_hub_mt_completed.length
+        );
+
+      let finalData = {};
+      finalData.total_patients = totalPatients;
+      finalData.averages = averages;
+
+      return res.status(200).json({ status: "success", data: finalData });
+    } catch (error) {
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  } else {
+    return res
+      .status(403)
+      .json({ status: "error", message: "INVALID_CREDENTIALS" });
+  }
+};
+
+const getPatientTimes = async (req, res) => {
+  try {
+    const patientId = req.params.patientId;
+    const patientTimes = await getPatientCalculatedTimes(patientId);
+    return res.status(200).json(patientTimes);
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+function calculateTimeBetweenTwoTimes(startTime, endTime) {
+  if (!startTime || !endTime) return null;
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const diffMs = end - start;
+  return Math.floor(diffMs / 1000 / 60); // Convert milliseconds to minutes
+}
 
 const addPatient = async (req, res) => {
   try {
@@ -209,7 +460,10 @@ const addPatient = async (req, res) => {
           .format("YYYY-MM-DD HH:mm:ss");
 
         let created = new Date().toISOString();
-        let admission_time = new Date().toISOString().replace("T", " ").replace("Z"," ");
+        let admission_time = new Date()
+          .toISOString()
+          .replace("T", " ")
+          .replace("Z", " ");
         patientData.admission_time = admission_time;
 
         // Adding 45 minutes to created
@@ -254,16 +508,106 @@ const addPatient = async (req, res) => {
           patientData.center_id,
           patientData.admission_time,
           datetime_of_stroke_timeends,
-          datetime_of_stroke_fortyfive_deadline
+          datetime_of_stroke_fortyfive_deadline,
         ]);
 
         const lastInsertedIdQuery = `SELECT LAST_INSERT_ID() as lastInsertId`;
         const lastInsertedIdResult = await executeQuery(lastInsertedIdQuery);
 
-        // Extract the last inserted id
         const lastInsertedId = lastInsertedIdResult[0].lastInsertId;
 
-        // Query the patients table again to fetch the inserted record
+        const [getCenterInfo] = await executeQuery(
+          `SELECT * FROM centerscollection WHERE id=?`,
+          [user.center_id]
+        );
+
+        const generatePatientCode = `${getCenterInfo.short_name}-${new Date()
+          .toISOString()
+          .slice(2, 10)}${lastInsertedId}`;
+
+        await executeQuery(
+          "UPDATE `patients` SET `patient_code` = ? WHERE `id` = ?",
+          [generatePatientCode, lastInsertedId]
+        );
+
+        const currentDate = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " ");
+
+        const currentTime = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " ");
+        const timeOfStroke = moment(patientData.datetime_of_stroke)
+          .subtract(330, "minutes")
+          .format("YYYY-MM-DD HH:mm:ss");
+        const calculateDifference = calculateTimeBetweenTwoTimes(
+          timeOfStroke,
+          currentTime
+        );
+
+        let isHubUser, isSpokeUser, isCenterUser;
+
+        console.log(getCenterInfo);
+
+        if (getCenterInfo.is_hub === "yes") {
+          isHubUser = "1";
+          isSpokeUser = "0";
+          isCenterUser = "0";
+
+          // Hub/Spoke In Status Insert
+          await executeQuery(
+            "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+            [lastInsertedId, user.center_id, 1, headerUserId]
+          );
+
+          if (calculateDifference.time_in_seconds > 16200) {
+            await executeQuery(
+              "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+              [lastInsertedId, user.center_id, 12, headerUserId]
+            );
+          }
+        } else {
+          isHubUser = "0";
+          isSpokeUser = "0";
+          isCenterUser = "0";
+
+          if (getCenterInfo.is_center === "yes") {
+            isHubUser = "0";
+            isSpokeUser = "0";
+            isCenterUser = "1";
+
+            await executeQuery(
+              "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+              [lastInsertedId, user.center_id, 19, headerUserId]
+            );
+
+            if (calculateDifference.time_in_seconds > 16200) {
+              await executeQuery(
+                "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+                [lastInsertedId, user.center_id, 23, headerUserId]
+              );
+            }
+          } else {
+            isHubUser = "0";
+            isSpokeUser = "1";
+            isCenterUser = "0";
+
+            await executeQuery(
+              "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+              [lastInsertedId, user.center_id, 2, headerUserId]
+            );
+
+            if (calculateDifference.time_in_seconds > 16200) {
+              await executeQuery(
+                "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+                [lastInsertedId, user.center_id, 11, headerUserId]
+              );
+            }
+          }
+        }
+
         const getPatientQuery = `SELECT * FROM patients WHERE id = ?`;
         const [insertedPatientResult] = await executeQuery(getPatientQuery, [
           lastInsertedId,
@@ -276,7 +620,7 @@ const addPatient = async (req, res) => {
             (${lastInsertedId}, 'admission');
         `;
 
-        executeQuery(addPatientNihssQuery);
+        await executeQuery(addPatientNihssQuery);
         const fetchPatientNihss = `SELECT nihss_time, nihss_value, nihss_options FROM patient_nihss WHERE patient_id = ${lastInsertedId}`;
         // Extract the inserted patient object
         const patientNihssData = await executeQuery(fetchPatientNihss);
@@ -296,7 +640,7 @@ const addPatient = async (req, res) => {
             (${lastInsertedId}, '3_months');
         `;
 
-        executeQuery(addPatientMrsQuery);
+        await executeQuery(addPatientMrsQuery);
         const fetchPatientMrs = `SELECT mrs_time, mrs_points, mrs_options FROM patient_mrs WHERE patient_id = ${lastInsertedId}`;
         // Extract the inserted patient object
         const patientMrsData = await executeQuery(fetchPatientMrs);
@@ -328,9 +672,72 @@ const addPatient = async (req, res) => {
         );
         insertedPatient.patient_scan_times = patientScanTimes;
 
-        await executeQuery('INSERT INTO patient_presentation (patient_id) VALUES (?)',[lastInsertedId]);
-        await executeQuery('INSERT INTO patient_contradictions (patient_id) VALUES (?)',[lastInsertedId]);
-        await executeQuery('INSERT INTO patient_ivt_medications (patient_id) VALUES (?)',[lastInsertedId]);
+        await executeQuery(
+          `INSERT INTO user_patients (
+              center_id, 
+              patient_id, 
+              user_id, 
+              is_hub, 
+              hub_id, 
+              is_spoke, 
+              is_center, 
+              in_transition, 
+              last_updated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [
+            user.center_id,
+            lastInsertedId,
+            headerUserId,
+            isHubUser === "1" ? 1 : 0,
+            isHubUser === "1" ? user.center_id : getCenterInfo.main_hub,
+            isSpokeUser === "1" ? 1 : 0,
+            isCenterUser === "1" ? 1 : 0,
+            0,
+          ]
+        );
+
+        await executeQuery(
+          "INSERT INTO patient_presentation (patient_id) VALUES (?)",
+          [lastInsertedId]
+        );
+        await executeQuery(
+          "INSERT INTO patient_contradictions (patient_id) VALUES (?)",
+          [lastInsertedId]
+        );
+        await executeQuery(
+          "INSERT INTO patient_ivt_medications (patient_id) VALUES (?)",
+          [lastInsertedId]
+        );
+
+        let codeStrokeTransitionId;
+
+        if (getCenterInfo.is_hub === "yes") {
+          codeStrokeTransitionId = 14; // Code Stroke Status Code from Hub
+        } else if (getCenterInfo.is_center === "yes") {
+          codeStrokeTransitionId = 24;
+        } else {
+          codeStrokeTransitionId = 15; // Code Stroke Status Code from Spoke
+        }
+
+        const insertQuery = `
+    INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id, created)
+    VALUES (?, ?, ?, ?, ?)
+`;
+
+        const queryParams = [
+          data.patient_id,
+          user.center_id,
+          codeStrokeTransitionId,
+          headerUserId,
+          currentDate,
+        ];
+
+        try {
+          await executeQuery(insertQuery, queryParams);
+          console.log("Transition status inserted successfully.");
+        } catch (error) {
+          console.error("Error inserting transition status:", error);
+        }
 
         // const savedPatient = await Patient.insertMany([patientData]);
         return res.status(200).json({ data: insertedPatient });
@@ -345,12 +752,639 @@ const addPatient = async (req, res) => {
   }
 };
 
+function calculateTimeBetweenTwoTimes(startTime, endTime) {
+  if (!startTime || !endTime) return null;
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const diffMs = end - start;
+  return Math.floor(diffMs / 1000 / 60); // Convert milliseconds to minutes
+}
+
+async function getPatientCalculatedTimes(patientId) {
+  const finalTimeArray = {};
+
+  // Assuming executeQuery is an asynchronous function that uses Promises
+  const getPatientTableTimes = await executeQuery(
+    `SELECT admission_time, datetime_of_stroke FROM patients WHERE id = ?`,
+    [patientId]
+  );
+  const patientTableTimes = getPatientTableTimes[0]; // Assuming the result is an array of rows
+  finalTimeArray["admission_time"] = patientTableTimes.admission_time;
+  finalTimeArray["datetime_of_stroke"] = patientTableTimes.datetime_of_stroke;
+
+  const getPatientScanTimes = await executeQuery(
+    `SELECT ct_scan_time, mr_mra_time, dsa_time_completed FROM patient_scan_times WHERE patient_id = ?`,
+    [patientId]
+  );
+  const patientScanTimes = getPatientScanTimes[0];
+  finalTimeArray["ct_scan_time"] = patientScanTimes.ct_scan_time;
+
+  const getPatientIVTTimes = await executeQuery(
+    `SELECT door_to_needle_time FROM patient_ivt_medications WHERE patient_id = ?`,
+    [patientId]
+  );
+  const patientIVTTimes = getPatientIVTTimes[0];
+  finalTimeArray["door_to_needle_time"] = patientIVTTimes.door_to_needle_time;
+
+  const getPatientHubMTStartedTime = await executeQuery(
+    `SELECT created FROM transition_statuses WHERE patient_id = ? AND status_id = '6'`,
+    [patientId]
+  );
+  finalTimeArray["mt_started_time"] = getPatientHubMTStartedTime[0]
+    ? getPatientHubMTStartedTime[0].created
+    : null;
+
+  const getPatientHubMTCompletedTime = await executeQuery(
+    `SELECT created FROM transition_statuses WHERE patient_id = ? AND status_id = '18'`,
+    [patientId]
+  );
+  finalTimeArray["mt_completed_time"] = getPatientHubMTCompletedTime[0]
+    ? getPatientHubMTCompletedTime[0].created
+    : null;
+
+  const calculatedTimes = {
+    tfso_time: calculateTimeBetweenTwoTimes(
+      finalTimeArray["datetime_of_stroke"],
+      finalTimeArray["admission_time"]
+    ),
+    door_to_ct_time: finalTimeArray["ct_scan_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["ct_scan_time"]
+        )
+      : null,
+    door_to_needle_time: finalTimeArray["door_to_needle_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["door_to_needle_time"]
+        )
+      : null,
+    door_to_groin_puncture: finalTimeArray["mt_started_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["mt_started_time"]
+        )
+      : null,
+    ct_to_groin_puncture:
+      finalTimeArray["mt_started_time"] && finalTimeArray["ct_scan_time"]
+        ? calculateTimeBetweenTwoTimes(
+            finalTimeArray["ct_scan_time"],
+            finalTimeArray["mt_started_time"]
+          )
+        : null,
+    door_to_hub_mt_completed: finalTimeArray["mt_completed_time"]
+      ? calculateTimeBetweenTwoTimes(
+          finalTimeArray["admission_time"],
+          finalTimeArray["mt_completed_time"]
+        )
+      : null,
+  };
+
+  return {
+    times: finalTimeArray,
+    calculated: calculatedTimes,
+  };
+}
+
+const getPatientDetails = async (patientID, userId) => {
+  // Get the information of the patient
+  const [patient] = await executeQuery("SELECT * FROM Patients WHERE id = ?", [
+    patientID,
+  ]);
+  if (!patient) {
+    return null;
+  }
+
+  patient.patient_checked = patientCheckedbyUser(
+    patientID,
+    userId,
+    patient.last_updated
+  );
+
+  const datetimeStrokeStarts = new Date(patient.datetime_of_stroke).getTime();
+  const datetimeStrokeEnds = new Date(
+    patient.datetime_of_stroke_timeends
+  ).getTime();
+  const currentTime = new Date().getTime();
+
+  if (currentTime > datetimeStrokeStarts) {
+    patient.show_increment_timer = true;
+  }
+
+  const results = await executeQuery(
+    `SELECT created, id, status_id, title FROM transition_statuses_view WHERE patient_id = 
+      ${patientID}
+       AND (status_id = 1 OR status_id = 2 OR status_id = 19) ORDER BY id DESC LIMIT 1`
+  );
+
+  const getPatientTransitionStatusesOfEntry = results.map((row) => {
+    const { created, id, status_id, title } = row;
+    return { created, id, status_id, title };
+  });
+
+  // Check if there are any results
+  if (getPatientTransitionStatusesOfEntry.length > 0) {
+    const fortyfiveminsStart = new Date(
+      getPatientTransitionStatusesOfEntry[0].created
+    );
+    const fortyfiveminsEnds = new Date(
+      fortyfiveminsStart.getTime() + 45 * 60000
+    ); // Adding 45 minutes in milliseconds
+
+    const currentTime = new Date();
+    if (currentTime > fortyfiveminsStart && currentTime < fortyfiveminsEnds) {
+      patient.show_decrement_timer = true;
+      patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
+    } else {
+      patient.show_decrement_timer = false;
+      patient.datetime_of_procedure_to_be_done = fortyfiveminsEnds;
+    }
+  }
+
+  // Hide Decrement timer if TFSO is more than 4.5 hours
+  const checkTFSO = new Date(
+    new Date(patient.datetime_of_stroke).getTime() + 4.5 * 3600000
+  ); // Adding 4.5 hours in milliseconds
+  if (checkTFSO > currentTime) {
+    patient.show_decrement_timer = false;
+  }
+
+  const transitionViewFetch = await executeQuery(
+    `SELECT created, id, status_id, title FROM transition_statuses_view WHERE patient_id = 
+      ${patientID} 
+      AND (status_id = 11 OR status_id = 16 OR status_id = 17 OR status_id = 23 OR status_id = 25) ORDER BY id DESC LIMIT 1`
+  );
+
+  const getPatientTransitionStatusesOfEntryForStoppingClock =
+    transitionViewFetch.map((row) => {
+      const { created, id, status_id, title } = row;
+      return { created, id, status_id, title };
+    });
+
+  // Check if there are any results
+  if (
+    getPatientTransitionStatusesOfEntryForStoppingClock &&
+    getPatientTransitionStatusesOfEntryForStoppingClock.length > 0
+  ) {
+    const clockedStoppedat = new Date(
+      getPatientTransitionStatusesOfEntryForStoppingClock[0].created
+    );
+
+    const date_a = new Date(patient.datetime_of_stroke);
+    const date_b = clockedStoppedat;
+
+    const diffTime = Math.abs(date_b - date_a);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(
+      (diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+    const diffMinutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+    const diffSeconds = Math.floor((diffTime % (1000 * 60)) / 1000);
+
+    const date_array = [];
+    if (diffDays > 0) {
+      date_array.push(diffDays + "d");
+    }
+    if (diffHours > 0) {
+      date_array.push(diffHours + "h");
+    }
+    if (diffMinutes > 0) {
+      date_array.push(diffMinutes + "m");
+    }
+    if (diffSeconds > 0) {
+      date_array.push(diffSeconds + "s");
+    }
+
+    patient.show_increment_timer = false;
+    patient.show_tfso_total_time_message_box = true;
+    patient.show_total_time_taken_from_entry = date_array.join(" : ");
+
+    // Needle Time Clock
+    const getPatientIVTTimes = patient_ivt_medications.find(
+      (item) => item.patient_id === patient.id
+    );
+    if (getPatientIVTTimes) {
+      const fortfive_date_a = new Date(patient.admission_time);
+      const fortfive_date_b = new Date(getPatientIVTTimes.door_to_needle_time);
+
+      const decrement_diffTime = Math.abs(fortfive_date_b - fortfive_date_a);
+      const decrement_diffDays = Math.floor(
+        decrement_diffTime / (1000 * 60 * 60 * 24)
+      );
+      const decrement_diffHours = Math.floor(
+        (decrement_diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+      );
+      const decrement_diffMinutes = Math.floor(
+        (decrement_diffTime % (1000 * 60 * 60)) / (1000 * 60)
+      );
+      const decrement_diffSeconds = Math.floor(
+        (decrement_diffTime % (1000 * 60)) / 1000
+      );
+
+      const decrement_date_array = [];
+      if (decrement_diffDays > 0) {
+        decrement_date_array.push(decrement_diffDays + "d");
+      }
+      if (decrement_diffHours > 0) {
+        decrement_date_array.push(decrement_diffHours + "h");
+      }
+      if (decrement_diffMinutes > 0) {
+        decrement_date_array.push(decrement_diffMinutes + "m");
+      }
+      if (decrement_diffSeconds > 0) {
+        decrement_date_array.push(decrement_diffSeconds + "s");
+      }
+
+      patient.show_decrement_timer = false;
+      patient.show_45_minutes_deadline_box = true;
+      patient.show_45_minutes_taken_deadline = decrement_date_array.join(" : ");
+    }
+  }
+
+  const getPatientIVTTimesQuery = `SELECT door_to_needle_time FROM patient_ivt_medications WHERE patient_id = ${patient.id}`;
+  const getPatientIVTTimes = await executeQuery(getPatientIVTTimesQuery);
+
+  if (getPatientIVTTimes && getPatientIVTTimes.door_to_needle_time) {
+    const fortfive_date_a = new Date(patient.admission_time);
+    const fortfive_date_b = new Date(getPatientIVTTimes.door_to_needle_time);
+
+    const decrement_interval = Math.abs(fortfive_date_b - fortfive_date_a);
+    const decrementDays = Math.floor(
+      decrement_interval / (1000 * 60 * 60 * 24)
+    );
+    const decrementHours = Math.floor(
+      (decrement_interval % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+    const decrementMinutes = Math.floor(
+      (decrement_interval % (1000 * 60 * 60)) / (1000 * 60)
+    );
+    const decrementSeconds = Math.floor(
+      (decrement_interval % (1000 * 60)) / 1000
+    );
+
+    const decrementDateArray = [];
+    if (decrementDays > 0) {
+      decrementDateArray.push(decrementDays + "d");
+    }
+    if (decrementHours > 0) {
+      decrementDateArray.push(decrementHours + "h");
+    }
+    if (decrementMinutes > 0) {
+      decrementDateArray.push(decrementMinutes + "m");
+    }
+    if (decrementSeconds > 0) {
+      decrementDateArray.push(decrementSeconds + "s");
+    }
+
+    patient.show_decrement_timer = false;
+    patient.show_45_minutes_deadline_box = true;
+    patient.show_45_minutes_taken_deadline = decrementDateArray.join(" : ");
+  }
+
+  // Fetch user data
+  const getUserDataQuery = `SELECT id, fullname, phone_number FROM usercollection WHERE id = ?`;
+  const userData = await executeQuery(getUserDataQuery, [patient.created_by]);
+  patient.user_data = userData[0] || {};
+
+  // Fetch quick information about the patient from user_patients table
+  const getUserPatientsQuery = `SELECT * FROM user_patients WHERE patient_id = ${patientID}`;
+  const patientQuickData = await executeQuery(getUserPatientsQuery);
+  console.log(patientQuickData);
+  // Check if the patient is from Spoke
+  patient.is_spoke_patient =
+    patientQuickData[0] && patientQuickData[0].is_spoke === 1;
+
+  // Check if the patient is from Hub
+  patient.is_hub_patient =
+    patientQuickData[0] && patientQuickData[0].is_hub === 1;
+
+  // Check if the patient is from center
+  patient.is_center_patient =
+    patientQuickData[0] && patientQuickData[0].is_center === 1;
+
+  // Check if the user has been transitioned
+  patient.in_transition =
+    patientQuickData[0] && patientQuickData[0].in_transition === 1;
+
+  // Check if the patient can be transitioned to Hub
+  patient.can_be_transitioned_to_hub =
+    patient.is_spoke_patient && !patient.in_transition;
+  patient.already_transitioned =
+    patient.is_spoke_patient && patient.in_transition;
+
+  // Check if the patient can be transitioned to Spoke
+  patient.can_be_transitioned_to_spoke =
+    patient.is_center_patient && !patient.in_transition;
+  patient.already_transitioned =
+    patient.is_center_patient && patient.in_transition;
+
+  // Fetch the user's center ID
+  const getUserCenterIdQuery = `SELECT center_id FROM usercollection WHERE id = ?`;
+  const userCenterIdResult = await executeQuery(getUserCenterIdQuery, [userId]);
+  const userCenterId = userCenterIdResult[0].center_id;
+
+  // Fetch center information based on the user's center ID
+  const getCenterInfoQuery = `SELECT * FROM centerscollection WHERE id = ${userCenterId}`;
+  const centerInfo = await executeQuery(getCenterInfoQuery);
+  const isUserFromHub = centerInfo[0].is_hub === "yes";
+
+  // Set whether the user is from the hub
+  patient.is_user_from_hub = isUserFromHub;
+
+  // Set center information
+  patient.center_info = centerInfo[0];
+
+  // Check permissions based on user and patient details
+  if (patient.is_user_from_hub) {
+    if (
+      patient.is_hub_patient ||
+      (patient.in_transition &&
+        (patient.is_spoke_patient || patient.is_center_patient))
+    ) {
+      patient.can_edit_patient_details = true;
+      patient.show_original_name = true;
+    } else {
+      patient.can_edit_patient_details = false;
+      patient.show_original_name = false;
+    }
+  } else {
+    if (patient.is_spoke_patient && !patient.in_transition) {
+      patient.can_edit_patient_details = true;
+      patient.show_original_name = true;
+    } else if (patient.is_center_patient && !patient.in_transition) {
+      patient.can_edit_patient_details = true;
+      patient.show_original_name = true;
+    } else {
+      patient.can_edit_patient_details = false;
+      patient.show_original_name = false;
+    }
+  }
+
+  if (patient["is_wakeup_stroke"] == "1") {
+    patient["is_wakeup_stroke"] = true;
+  } else {
+    patient["is_wakeup_stroke"] = false;
+  }
+
+  //  Check if its a hospital stroke
+  if (patient["is_hospital_stroke"] == "1") {
+    patient["is_hospital_stroke"] = true;
+  } else {
+    patient["is_hospital_stroke"] = false;
+  }
+
+  if (patient["scans_needed"] == "1") {
+    patient["scans_needed"] = true;
+  } else {
+    patient["scans_needed"] = false;
+  }
+
+  if (patient["scans_completed"] == "1") {
+    patient["scans_completed"] = true;
+  } else {
+    patient["scans_completed"] = false;
+  }
+
+  if (patient["scans_uploaded"] == "1") {
+    patient["scans_uploaded"] = true;
+  } else {
+    patient["scans_uploaded"] = false;
+  }
+
+  // Fetch patient scan times
+  const patientScanTimesResult = await executeQuery(
+    `SELECT ct_scan_time, mr_mra_time, dsa_time_completed, type_of_stroke, lvo, lvo_types, lvo_site, aspects FROM patient_scan_times WHERE patient_id = ${patientID}`
+  );
+  const patientScanTimes = patientScanTimesResult[0];
+
+  // Assign patient scan times to patient object
+  patient.patient_scan_times = patientScanTimes;
+
+  // Check type of stroke
+  if (patient.patient_scan_times.type_of_stroke !== null) {
+    if (patient.patient_scan_times.type_of_stroke === "Hemorrhagic") {
+      patient.show_stroke_type_text = true;
+      patient.showIVTProtocolBox = false;
+      patient.stroke_type = "H";
+    } else {
+      patient.show_stroke_type_text = true;
+      patient.stroke_type = "I";
+      patient.showIVTProtocolBox = true;
+    }
+  } else {
+    patient.show_stroke_type_text = false;
+    patient.showIVTProtocolBox = true;
+  }
+
+  // Check if LVO is present
+  patient.patient_scan_times.lvo = patient.patient_scan_times.lvo === "1";
+
+  // Fetch patient contradictions data
+  const getPatientContradictionsQuery = `SELECT contradictions_data, absolute_score, relative_score, ivt_eligible, checked FROM patient_contradictions WHERE patient_id = ${patientID}`;
+  const patientContradictionsResult = await executeQuery(
+    getPatientContradictionsQuery
+  );
+  const patientContradictions = patientContradictionsResult[0];
+
+  // Check absolute score
+  if (patientContradictions.absolute_score > 0) {
+    patientContradictions.show_ivteligible_box = false;
+    patientContradictions.show_ivtineligible_box = true;
+  } else {
+    patientContradictions.show_ivtineligible_box = false;
+
+    // Check conditions for showing ivteligible_box
+    if (
+      patientContradictions.relative_score === 0 &&
+      patientContradictions.checked
+    ) {
+      patientContradictions.show_ivteligible_box = true;
+    }
+    if (
+      patientContradictions.relative_score > 0 &&
+      patientContradictions.checked
+    ) {
+      patientContradictions.show_ivteligible_box = true;
+    }
+    if (
+      patientContradictions.absolute_score > 0 &&
+      patientContradictions.checked
+    ) {
+      patientContradictions.show_ivteligible_box = false;
+    }
+
+    // Set ivt_eligible based on conditions
+    if (
+      patientContradictions.absolute_score === 0 &&
+      patientContradictions.relative_score === 0 &&
+      patientContradictions.checked === 1
+    ) {
+      patientContradictions.ivt_eligible = 1;
+    }
+  }
+
+  // Convert ivt_eligible and checked to boolean values
+  patientContradictions.ivt_eligible = patientContradictions.ivt_eligible === 1;
+  patientContradictions.checked = patientContradictions.checked === 1;
+
+  // Assign patient contradictions data to patient object
+  patient.patient_contradictions = patientContradictions;
+
+  const getPatientIVTMedicationsQuery = `SELECT medicine, dose_value, patient_weight, total_dose, bolus_dose, infusion_dose, door_to_needle_time FROM patient_ivt_medications WHERE patient_id = ${patientID}`;
+  const patientIVTMedicationsResult = await executeQuery(
+    getPatientIVTMedicationsQuery
+  );
+  const patientIVTMedications = patientIVTMedicationsResult[0];
+
+  // Check if door_to_needle_time exists
+  if (patientIVTMedications.door_to_needle_time) {
+    const dt = new Date(patientIVTMedications.door_to_needle_time);
+    const formattedDateTime = dt.toISOString();
+    const formattedDateTimeWithOffset = formattedDateTime.slice(0, -1) + "Z"; // Append 'Z' for UTC timezone
+    patientIVTMedications.door_to_needle_time = formattedDateTimeWithOffset;
+
+    // Format door_to_needle_time for display
+    const doorToNeedleTimeUnix = Date.parse(
+      patientIVTMedications.door_to_needle_time
+    );
+    const doorToNeedleTimeFormatted = new Date(
+      doorToNeedleTimeUnix - 330 * 60 * 1000
+    ).toLocaleString("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour12: true,
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    patientIVTMedications.door_to_needle_time_formatted =
+      doorToNeedleTimeFormatted;
+  }
+
+  // Assign patient IVT medications data to patient object
+  patient.patient_ivt_medications = patientIVTMedications;
+
+  const fetchPatientNihss = `SELECT nihss_time, nihss_value, nihss_options FROM patient_nihss WHERE patient_id = ${patientID}`;
+  // Extract the inserted patient object
+
+  const patientNihssData = await executeQuery(fetchPatientNihss);
+  patient.patient_nihss = {};
+
+  patientNihssData.forEach((row) => {
+    patient.patient_nihss[row.nihss_time] = {
+      nihss_value: row.nihss_value,
+      nihss_options: row.nihss_options || "",
+    };
+  });
+
+  const fetchPatientMrs = `SELECT mrs_time, mrs_points, mrs_options FROM patient_mrs WHERE patient_id = ${patientID}`;
+  // Extract the inserted patient object
+  const patientMrsData = await executeQuery(fetchPatientMrs);
+  patient.patient_mrs = {};
+  patientMrsData.forEach((row) => {
+    patient.patient_mrs[row.mrs_time] = {
+      mrs_points: row.mrs_points,
+      mrs_options: row.mrs_options || "",
+    };
+  });
+
+  const fetchPatientComplicationsQuery = `SELECT * FROM patient_complications WHERE patient_id = ${patientID}`;
+  const [patientComplicationsData] = await executeQuery(
+    fetchPatientComplicationsQuery
+  );
+
+  patient.patient_complications = patientComplicationsData;
+
+  const user_data_query = `select id as user_id, fullname, phone_number from usercollection where id=?`;
+  const [user_data] = await executeQuery(user_data_query, [patient.created_by]);
+  patient.user_data = user_data;
+  console.log(user_data);
+
+  const patientFilesQuery = `SELECT 
+  pf.scan_type,
+  JSON_ARRAYAGG(JSON_OBJECT('file', pf.file, 'file_type', pf.file_type, 'user_role', u.user_role, 'created', pf.created)) AS scan_files
+FROM 
+  patient_files pf
+JOIN 
+  UserCollection u ON pf.user_id = u.id
+WHERE 
+  pf.patient_id = ?
+GROUP BY 
+  pf.scan_type`;
+
+  const patientFilesData = await executeQuery(patientFilesQuery, [patientID]);
+  patient.patient_files = { ncct: [], cta_ctp: [], mri: [], mra: [] };
+
+  patientFilesData.forEach((item) => {
+    patient.patient_files[item?.scan_type] = item?.scan_files;
+  });
+
+  const transitionStatusQuery = `
+        SELECT created, id, status_id, title 
+        FROM transition_statuses_view 
+        WHERE patient_id = ? AND status_id IN (1, 2, 19) 
+        ORDER BY id DESC 
+        LIMIT 1`;
+  const transitionStatuses = await executeQuery(transitionStatusQuery, [
+    patientID,
+  ]);
+
+  if (transitionStatuses.length > 0) {
+    const { created } = transitionStatuses[0];
+    const fortyFiveMinsLater = new Date(
+      new Date(created).getTime() + 45 * 60000
+    );
+    patient.show_decrement_timer =
+      currentTime > new Date(created) && currentTime < fortyFiveMinsLater;
+    patient.datetime_of_procedure_to_be_done = fortyFiveMinsLater;
+  } else {
+    patient.show_decrement_timer = false;
+  }
+
+  // Query for stopping the clock based on certain status IDs
+  const stopClockQuery = `
+        SELECT created 
+        FROM transition_statuses_view 
+        WHERE patient_id = ? AND status_id IN (11, 16, 17, 23, 25) 
+        ORDER BY id DESC 
+        LIMIT 1`;
+  const stopClockStatuses = await executeQuery(stopClockQuery, [patientID]);
+
+  if (stopClockStatuses.length > 0) {
+    const clockedStoppedAt = stopClockStatuses[0].created;
+    const strokeDateTime = patient.datetime_of_stroke; // Assuming this is set somewhere in your code
+    const dateA = new Date(strokeDateTime);
+    const dateB = new Date(clockedStoppedAt);
+
+    const diff = Math.abs(dateB - dateA);
+    const diffDays = Math.floor(diff / (24 * 3600 * 1000));
+    const diffHours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000));
+    const diffMinutes = Math.floor((diff % (3600 * 1000)) / 60000);
+    const diffSeconds = Math.floor((diff % 60000) / 1000);
+
+    let timeComponents = [];
+    if (diffDays > 0) timeComponents.push(`${diffDays}d`);
+    if (diffHours > 0) timeComponents.push(`${diffHours}h`);
+    if (diffMinutes > 0) timeComponents.push(`${diffMinutes}m`);
+    if (diffSeconds > 0) timeComponents.push(`${diffSeconds}s`);
+
+    patient.show_increment_timer = false;
+    patient.show_tfso_total_time_message_box = true;
+    patient.show_total_time_taken_from_entry = timeComponents.join(" : ");
+  }
+
+  patient.calculated_times = await getPatientCalculatedTimes(patientID);
+
+  return patient;
+};
+
 const getUserPatients = async (req, res) => {
   const headerUserId = req.headers.userid;
   const headerUserToken = req.headers.usertoken;
   if (await ValidateUser(headerUserId, headerUserToken)) {
     // const getUserCenterId = await User.findById(headerUserId);
-    const [getUser] = await executeQuery(
+    const [user] = await executeQuery(
       "SELECT * FROM usercollection WHERE id = ?",
       [headerUserId]
     );
@@ -361,7 +1395,7 @@ const getUserPatients = async (req, res) => {
     // );
     const [getCenterInfo] = await executeQuery(
       "SELECT * FROM centerscollection WHERE id = ?",
-      [getUser.center_id]
+      [user.center_id]
     );
     // console.log(getCenterInfo);
 
@@ -369,7 +1403,7 @@ const getUserPatients = async (req, res) => {
     if (getCenterInfo.main_hub && getCenterInfo.main_hub !== null) {
       mainHubId = getCenterInfo.main_hub;
     } else {
-      mainHubId = getCenterInfo.id;
+      mainHubId = user.center_id;
     }
 
     const patientTypes = {
@@ -384,7 +1418,7 @@ const getUserPatients = async (req, res) => {
     if (getCenterInfo.is_hub === "yes") {
       getSpokePatients = await executeQuery(
         "SELECT * FROM patients WHERE center_id = ?",
-        [getCenterInfo.id]
+        [user.center_id]
       );
       // getSpokePatients = await this.ci.db.select("user_patients", "*", {
       //   AND: [{ is_hub: "0" }, { in_transition: "0" }, { hub_id: mainHubId }],
@@ -393,7 +1427,7 @@ const getUserPatients = async (req, res) => {
     } else {
       getSpokePatients = await executeQuery(
         "SELECT * FROM patients WHERE center_id = ?",
-        [getCenterInfo.id]
+        [user.center_id]
       );
       // getSpokePatients = await this.ci.db.select("user_patients", "*", {
       //   AND: [{ center_id: getUserCenterId.center_id }, { hub_id: mainHubId }],
@@ -441,10 +1475,10 @@ const getUserPatients = async (req, res) => {
       }
     }
     if (getCenterInfo.is_hub === "yes") {
-      // const spokes = await Centers.find({ main_hub: getCenterInfo.id });
+      // const spokes = await Centers.find({ main_hub: user.center_id });
       const spokes = await executeQuery(
         "SELECT * FROM centerscollection WHERE main_hub = ?",
-        [getCenterInfo.id]
+        [user.center_id]
       );
       console.log(spokes);
       for (const spoke of spokes) {
@@ -523,7 +1557,7 @@ const getSinglePatient = async (req, res) => {
         return res.status(403).json(output);
       }
       patientId = parseInt(patientId);
-      const patientDetails = await getPatientDetails(patientId);
+      const patientDetails = await getPatientDetails(patientId, headerUserId);
       if (patientDetails == null) {
         const output = { data: { message: "Patient Not Found" } };
         return res.status(403).json(output);
@@ -608,12 +1642,12 @@ const updateBasicData = async (req, res) => {
 
       // console.log(data.is_wakeup_stroke);
       if (data.is_wakeup_stroke && data.is_wakeup_stroke) {
-        patientBasicData.is_wakeup_stroke = data.is_wakeup_stroke;
-      }
+        patientBasicData.is_wakeup_stroke = "1";
+      } else patientBasicData.is_wakeup_stroke = "0";
 
       if (data.is_hospital_stroke && data.is_hospital_stroke) {
-        patientBasicData.is_hospital_stroke = data.is_hospital_stroke;
-      }
+        patientBasicData.is_hospital_stroke = "1";
+      } else patientBasicData.is_hospital_stroke = "0";
 
       if (data.notes && data.notes) {
         patientBasicData.notes = data.notes;
@@ -794,15 +1828,15 @@ const updateBasicData = async (req, res) => {
 
       //   // ci.db.update("user_patients", { last_updated: new Date().toISOString() }, { patient_id: data.patient_id });
 
-        // const updateData = {
-        //     user_id: headerUserId[0],
-        //     patient_id: data.patient_id,
-        //     update_type: "basic_details",
-        //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
-        //     last_updated: new Date().toISOString(),
-        // };
+      // const updateData = {
+      //     user_id: headerUserId,
+      //     patient_id: data.patient_id,
+      //     update_type: "basic_details",
+      //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+      //     last_updated: new Date().toISOString(),
+      // };
 
-        // updatePatientStatus(updateData);
+      // updatePatientStatus(updateData);
 
       const output = {
         data: "Basic Details updates successfully.",
@@ -822,7 +1856,7 @@ const updateScanTimesofPatient = async (req, res) => {
     try {
       const data = req.body;
       const errors = [];
-
+      console.log(data);
       if (!data.patient_id || data.patient_id === "") {
         errors.push("patient_id is required");
       } else if (!data.ct_scan_time || data.ct_scan_time === "") {
@@ -869,7 +1903,10 @@ const updateScanTimesofPatient = async (req, res) => {
           patientScanTimes.aspects = data.aspects;
         }
 
-        patientScanTimes.last_updated = new Date().toISOString().replace("T"," ").replace("Z"," ");
+        patientScanTimes.last_updated = new Date()
+          .toISOString()
+          .replace("T", " ")
+          .replace("Z", " ");
 
         const updatePatientScanTimesQuery = `UPDATE patient_scan_times
         SET 
@@ -951,7 +1988,7 @@ const updateScanTimesofPatient = async (req, res) => {
 
         // Global Status
         // const updateData = {
-        //     user_id: headerUserId[0],
+        //     user_id: headerUserId,
         //     patient_id: data.patient_id,
         //     update_type: "scan_details",
         //     url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
@@ -969,6 +2006,160 @@ const updateScanTimesofPatient = async (req, res) => {
       console.log(err);
       const output = { data: { message: "Something Went Wrong" } };
       return res.status(403).json(output);
+    }
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(403).json(output);
+  }
+};
+
+const updatePatientMedications = async (req, res) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+  if (ValidateUser(headerUserId, headerUserToken)) {
+    const data = req.body;
+    const errors = [];
+    if (!data.patient_id || data.patient_id === "") {
+      errors.push("patient_id is required");
+    }
+    if (!data.medicine || data.medicine === "") {
+      errors.push("Select a medicine");
+    }
+    if (!data.patient_weight || data.patient_weight === "") {
+      errors.push("Enter patient's body weight");
+    }
+    if (errors.length > 0) {
+      const output = { data: { message: errors[0] } };
+      return res.status(403).json(output);
+    } else {
+      const patientMedicationsData = {};
+
+      if (data.medicine) {
+        patientMedicationsData["medicine"] = data.medicine;
+      }
+      if (data.patient_weight) {
+        patientMedicationsData["patient_weight"] = data.patient_weight;
+      }
+      if (data.dose_value) {
+        patientMedicationsData["dose_value"] = data.dose_value;
+      }
+      if (data.total_dose) {
+        patientMedicationsData["total_dose"] = data.total_dose;
+      }
+      if (data.bolus_dose) {
+        patientMedicationsData["bolus_dose"] = data.bolus_dose;
+      }
+      if (data.infusion_dose) {
+        patientMedicationsData["infusion_dose"] = data.infusion_dose;
+      }
+      if (data.door_to_needle_time) {
+        patientMedicationsData["door_to_needle_time"] = data.door_to_needle_time
+          .replace("T", " ")
+          .replace("Z", " ");
+      } else {
+        patientMedicationsData["door_to_needle_time"] = null;
+      }
+      patientMedicationsData["last_updated"] = new Date()
+        .toISOString()
+        .replace("T", " ")
+        .replace("Z", " ");
+
+      const query = `
+        UPDATE patient_ivt_medications
+        SET medicine = ?, patient_weight = ?, dose_value = ?, total_dose = ?,
+            bolus_dose = ?, infusion_dose = ?, door_to_needle_time = ?, last_updated = ?
+        WHERE patient_id = ?`;
+      const values = [
+        patientMedicationsData["medicine"],
+        patientMedicationsData["patient_weight"],
+        patientMedicationsData["dose_value"],
+        patientMedicationsData["total_dose"],
+        patientMedicationsData["bolus_dose"],
+        patientMedicationsData["infusion_dose"],
+        patientMedicationsData["door_to_needle_time"],
+        patientMedicationsData["last_updated"],
+        data.patient_id,
+      ];
+
+      try {
+        await executeQuery(query, values);
+        // Update last updated field in Patients table
+        const updateQuery = `
+          UPDATE patients
+          SET ivt_medication = ?, body_weight = ?, last_updated = NOW()
+          WHERE id = ?`;
+        const updateValues = ["1", data.patient_weight, data.patient_id];
+        await executeQuery(updateQuery, updateValues);
+
+        const updateUserPatientsQuery = `
+          UPDATE user_patients
+          SET last_updated = NOW()
+          WHERE patient_id = ?`;
+        const updateUserPatientsValues = [data.patient_id];
+        await executeQuery(updateUserPatientsQuery, updateUserPatientsValues);
+
+        // Update a new status and update
+        const getUserCenterIdQuery =
+          "SELECT center_id FROM usercollection WHERE id = ?";
+        const getUserCenterIdValues = [headerUserId];
+        const getUserCenterIdResult = await executeQuery(
+          getUserCenterIdQuery,
+          getUserCenterIdValues
+        );
+        const centerId = getUserCenterIdResult[0].center_id;
+
+        const checkCenterQuery =
+          "SELECT is_hub, is_center FROM centerscollection WHERE id = ?";
+        const checkCenterValues = [centerId];
+        const checkCenterResult = await executeQuery(
+          checkCenterQuery,
+          checkCenterValues
+        );
+        let statusId = "";
+        if (checkCenterResult[0].is_hub === "yes") {
+          statusId = "10";
+        } else {
+          if (checkCenterResult[0].is_center === "yes") {
+            statusId = "22";
+          } else {
+            statusId = "9";
+          }
+        }
+        const insertStatusQuery = `
+          INSERT INTO transition_statuses (user_id, patient_id, status_id, center_id)
+          VALUES (?, ?, ?, ?)`;
+        const insertStatusValues = [
+          headerUserId,
+          data.patient_id,
+          statusId,
+          centerId,
+        ];
+        await executeQuery(insertStatusQuery, insertStatusValues);
+
+        // Global Status
+        const updateData = {
+          user_id: headerUserId,
+          patient_id: data.patient_id,
+          update_type: "medications",
+          url:
+            "snetchd://strokenetchandigarh.com/patient_detail/" +
+            data.patient_id,
+          last_updated: new Date()
+            .toISOString()
+            .replace("T", " ")
+            .replace("Z", " "),
+        };
+        // updatePatientStatus(updateData);
+        // Global Status
+
+        const output = {
+          data: { message: "Medications updated successfully." },
+        };
+        return res.status(200).json(output);
+      } catch (error) {
+        const output = { data: { message: error.message } };
+        return res.status(500).json(output);
+      }
     }
   } else {
     const output = { data: { message: "INVALID_CREDENTIALS" } };
@@ -1171,7 +2362,7 @@ const updatePatientComplications = async (req, res) => {
       //   );
 
       // const updateData = {
-      //   user_id: headerUserId[0],
+      //   user_id: headerUserId,
       //   patient_id: data.patient_id,
       //   update_type: "complications",
       //   url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
@@ -1190,53 +2381,107 @@ const updatePatientComplications = async (req, res) => {
   }
 };
 
-// const updateNIHSSofPatient = async (req, res) => {
-//   const headerUserId = req.headers.userid;
-//   const headerUserToken = req.headers.usertoken;
-//   if (await ValidateUser(headerUserId, headerUserToken)) {
-//     const data = req.body;
-//     // console.log(data);
-//     const errors = [];
-//     if (!data.patient_id) errors.push("patient_id is required");
-//     else if (!data.nihss_time) errors.push("nihss_time is required");
-//     else if (!data.nihss_value) errors.push("nihss_value is required");
+async function updatePatientContradictions(req, res) {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
 
-//     if (errors.length > 0) {
-//       return res.status(403).json({ message: errors[0] });
-//     } else {
-//       const patientNIHSS = {
-//         nihss_time: data.nihss_time,
-//         nihss_value: data.nihss_value,
-//       };
-//       console.log(patientNIHSS);
+  if (ValidateUser(headerUserId, headerUserToken)) {
+    const data = req.body;
+    console.log(data);
 
-//       if (data.nihss_options) {
-//         patientNIHSS.nihss_options = data.nihss_options;
-//       }
+    const errors = [];
 
-//       // const updatedNihssPatient = await Patient.findById(data.patient_id);
-//       // updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_value =
-//       //   patientNIHSS.nihss_value;
-//       // updatedNihssPatient.patient_nihss[patientNIHSS.nihss_time].nihss_options =
-//       //   patientNIHSS.nihss_options;
+    if (!data.patient_id || data.patient_id === "") {
+      errors.push("patient_id is required");
+    }
 
-//       // updatedNihssPatient.last_updated = Date.now();
+    if (errors.length > 0) {
+      const output = printData("error", { message: errors[0] });
+      return res.status(403).json(output);
+    } else {
+      const patientContradictionsData = {};
 
-//       // await updatedNihssPatient.save();
+      patientContradictionsData.contradictions_data =
+        data.contradictions_data || null;
+      patientContradictionsData.absolute_score = data.absolute_score;
+      patientContradictionsData.relative_score = data.relative_score;
+      patientContradictionsData.ivt_eligible = data.ivt_eligible;
+      patientContradictionsData.checked = 1;
+      patientContradictionsData.last_updated = new Date()
+        .toISOString()
+        .replace("T", " ")
+        .replace("Z", " ");
 
-//       const output = {
-//         data: {
-//           message: "NIHSS was updated successfully",
-//           nihss_data: patientNIHSS,
-//         },
-//       };
+      await executeQuery(
+        `UPDATE patient_contradictions SET ? WHERE patient_id = ${data.patient_id}`,
+        patientContradictionsData
+      );
 
-//       res.status(200).json(output);
-//     }
-//   } else {
-//     return res.status(403).json({ message: "INVALID_CREDENTIALS" });
-//   }
-// };
+      await executeQuery(
+        `UPDATE patients SET ivt_medication = '1', body_weight = '${data.patient_weight}', last_updated = NOW() WHERE id = ${data.patient_id}`
+      );
+      await executeQuery(
+        `UPDATE user_patients SET last_updated = NOW() WHERE patient_id = ${data.patient_id}`
+      );
+
+      if (data.ivt_eligible === "0" && data.absolute_score > 0) {
+        const getUserCenterIdResult = await executeQuery(
+          `SELECT center_id FROM usercollection WHERE user_id = ?`,
+          [headerUserId]
+        );
+        const getUserCenterId = getUserCenterIdResult[0].center_id;
+
+        const checkCenterResult = await executeQuery(
+          `SELECT is_hub, is_center FROM centerscollection WHERE id = ${getUserCenterId}`
+        );
+        const checkCenter = checkCenterResult[0];
+
+        let statusId = "";
+
+        if (checkCenter.is_hub === "yes") {
+          statusId = "12";
+        } else {
+          if (checkCenter.is_center === "yes") {
+            statusId = "23";
+          } else {
+            statusId = "11";
+          }
+        }
+
+        const insertStatusData = {
+          user_id: headerUserId,
+          patient_id: data.patient_id,
+          status_id: statusId,
+          center_id: getUserCenterId,
+          created: new Date().toISOString().replace("T", " ").replace("Z", " "),
+        };
+
+        await executeQuery(
+          "INSERT INTO transition_statuses SET ?",
+          insertStatusData
+        );
+      }
+
+      const updateData = {
+        user_id: headerUserId,
+        patient_id: data.patient_id,
+        update_type: "ivt_checklist",
+        url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+        last_updated: new Date().toISOString(),
+      };
+
+      // updatePatientStatus(updateData);
+
+      const output = {
+        data: { message: "IVT Checklist updated successfully." },
+      };
+      return res.status(200).json(output);
+    }
+  } else {
+    const output = { data: { message: "INVALID_CREDENTIALS" } };
+    return res.status(403).json(output);
+  }
+}
 
 const updateNIHSSofPatient = async (req, res) => {
   const headerUserId = req.headers.userid;
@@ -1561,7 +2806,7 @@ const codeStrokeAlert = async (req, res) => {
       //   const getUserCenterId = this.ci.db.get(
       //     "users",
       //     ["center_id", "fullname", "user_role"],
-      //     { user_id: headerUserId[0] }
+      //     { user_id: headerUserId }
       //   );
       //   const getCenterInfo = this.ci.db.get(
       //     "centers",
@@ -1586,7 +2831,7 @@ const codeStrokeAlert = async (req, res) => {
       //     const getAllUsersOneSignalFromHub = this.ci.db.select(
       //       "users",
       //       ["onesignal_userid", "phone_number"],
-      //       { center_id: getCenterInfo.id }
+      //       { center_id: user.center_id }
       //     );
 
       //     getAllUsersOneSignalFromHub.forEach((user) => {
@@ -1711,6 +2956,101 @@ const getHubSpokeCenters = async (req, res, args) => {
   }
 };
 
+const alertHubAndStartTransition = async (req, res, args) => {
+  const headerUserId = req.headers.userid;
+  const headerUserToken = req.headers.usertoken;
+
+  if (ValidateUser(headerUserId, headerUserToken)) {
+    const data = req.body;
+    const errors = [];
+    if (!data.patient_id || data.patient_id === "") {
+      errors.push("patient_id is required");
+    }
+
+    if (errors.length > 0) {
+      const output = {data:{ message: errors[0] }};
+      return res.status(403).json(output);
+    } else {
+      // Add a Transition Status: Spoke Out
+      const [getUserCenterId] = await executeQuery(
+        "SELECT center_id FROM usercollection WHERE id = ?",
+        [headerUserId]
+      );
+      await executeQuery(
+        "INSERT INTO transition_statuses (patient_id, center_id, status_id, user_id) VALUES (?, ?, ?, ?)",
+        [
+          data.patient_id,
+          getUserCenterId.center_id,
+          7,
+          headerUserId,
+        ]
+      );
+
+      await executeQuery(
+        "UPDATE user_patients SET last_updated = NOW(), in_transition = 1 WHERE patient_id = ?",
+        [data.patient_id]
+      );
+      await executeQuery("UPDATE patients SET last_updated = NOW() WHERE id = ?", [
+        data.patient_id,
+      ]);
+
+      // Send Push notifications to all the users from the Hub
+      const [getCenterInfo] = await executeQuery(
+        "SELECT center_name, main_hub FROM centerscollection WHERE id = ?",
+        [getUserCenterId.center_id]
+      );
+      const [hubInfo] = await executeQuery(
+        "SELECT id, center_name, center_location FROM centerscollection WHERE id = ?",
+        [getCenterInfo.main_hub]
+      );
+      const getAllUsersOneSignalFromHub = await executeQuery(
+        "SELECT fcm_userid, phone_number FROM usercollection WHERE center_id = ?",
+        [hubInfo.id]
+      );
+
+      // const pushIDs = getAllUsersOneSignalFromHub.map(
+      //   (user) => user.onesignal_userid
+      // );
+      // const phoneNumbers = getAllUsersOneSignalFromHub.map(
+      //   (user) => user.phone_number
+      // );
+
+      const getPatientNameCode = await executeQuery(
+        "SELECT name, patient_code FROM patients WHERE id = ?",
+        [data.patient_id]
+      );
+
+      // const pushData = {
+      //   title: "Code Stroke: Patient Referred",
+      //   message: `${getPatientNameCode.name} is being referred from ${getCenterInfo.center_name}`,
+      //   url: `snetchd://strokenetchandigarh.com/patient_detail/${data.patient_id}`,
+      //   devices: pushIDs,
+      // };
+
+      // Call function to send push notification
+      // sendPush(pushData);
+
+      // const smsData = {
+      //   to: phoneNumbers.join("<"),
+      //   message: `Code Stroke: Patient Referred! ${getPatientNameCode.name} is being referred from ${getCenterInfo.center_name}`,
+      // };
+
+      // Call function to send SMS
+      // sendSMS(smsData);
+
+      const output = {
+        data: {
+          message: `The patient is in transition to ${hubInfo.center_name} (${hubInfo.center_location})`,
+        },
+      };
+      return res.status(200).json(output);
+    }
+  } else {
+    const output = { message: "INVALID_CREDENTIALS" };
+    return res.status(403).json(output);
+  }
+};
+
 module.exports = {
   uploadFile,
   addPatient,
@@ -1727,4 +3067,9 @@ module.exports = {
   codeStrokeAlert,
   getHubSpokeCenters,
   getPatientDetails,
+  calculateBulkPatientTimings,
+  getPatientTimes,
+  updatePatientContradictions,
+  updatePatientMedications,
+  alertHubAndStartTransition,
 };

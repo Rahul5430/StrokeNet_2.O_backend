@@ -32,17 +32,17 @@ const sendEmailCode = async (req, res) => {
     const insertOtpQuery = `INSERT INTO OtpEmailCollections (emailAddress, otpCode) VALUES (?, ?)`;
     await executeQuery(insertOtpQuery, [email_address, otpCode]);
 
-    // Send email with OTP code
-    sendemail(email_address, otpCode)
-      .then((info) => {
+    // // Send email with OTP code
+    // sendemail(email_address, otpCode)
+    //   .then((info) => {
         const output = { data: { message: "email_sent" } };
         res.status(200).json(output);
-      })
-      .catch((err) => {
-        console.log(err);
-        const output = { data: { message: "Unable To send Otp" } };
-        res.status(403).json(output);
-      });
+    //   })
+    //   .catch((err) => {
+    //     console.log(err);
+    //     const output = { data: { message: "Unable To send Otp" } };
+    //     res.status(403).json(output);
+    //   });
   } catch (error) {
     console.log(error);
     const output = { data: { message: "Error sending email. Please try again later." } };

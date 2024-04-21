@@ -111,9 +111,9 @@ const signup = async (req, res) => {
       data.user_role,
       data.center_id,
       "active", // Assuming status is optional
-      !!center.is_hub, // Assuming is_hub_user, is_spoke_user, and is_center_user are optional
-      !!center.is_spoke,
-      !!center.is_center,
+      center.is_hub=="yes", // Assuming is_hub_user, is_spoke_user, and is_center_user are optional
+      center.is_spoke=="yes",
+      center.is_center=="yes",
     ];
 
     await executeQuery(insertUserQuery, insertUserData);
@@ -239,7 +239,6 @@ const forgotPassword = async (req, res) => {
 };
 
 const validateUser = async (req, res) => {
-  console.log("hello");
   const userId = req.headers.userid;
   const userToken = req.headers.usertoken;
   try {
@@ -265,7 +264,6 @@ const validateUser = async (req, res) => {
 };
 
 const ValidateUser = async (userId, userToken) => {
-  console.log("hello");
   try {
     // Verify the user token
     const decoded = jwt.verify(userToken, process.env.REFRESH_TOKEN_SECRET_KEY);

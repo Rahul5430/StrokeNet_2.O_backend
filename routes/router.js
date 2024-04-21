@@ -37,11 +37,20 @@ const {
   addPatientScanFile,
   deletePatientFile,
   codeStrokeAlert,
+  getPatientTimes,
+  calculateBulkPatientTimings,
+  updatePatientContradictions,
+  updatePatientMedications,
+  alertHubAndStartTransition
 } = require("../controller/PatientController");
 const {
   postTransitionStatus,
   postComment,
   getComments,
+  getTransitionStatuses,
+  getConclusionTypes,
+  postConclusion,
+  getOnlineUsers,
 } = require("../controller/PatientAnalysisController");
 const {
   changeOnlineStatus,
@@ -93,9 +102,12 @@ router.post("/email/verify_otp", verifyEmailOtp);
 router.get("/auth/validateUser", validateUser);
 router.get("/auth/update_online_status", changeOnlineStatus);
 router.post("/patients/add_patient", addPatient);
+router.post("/patients/update_patient_contradictions", updatePatientContradictions);
+router.post("/patients/update_patient_medications",updatePatientMedications);
 router.post("/patients/code_stroke_alert_manually", codeStrokeAlert);
 router.post("/patient_analysis/post_transition_status", postTransitionStatus);
 router.get("/patients/user_patients", getUserPatients);
+router.post("/patients/start_patient_transition_to_hub", alertHubAndStartTransition);
 router.post("/patients/update_patient_basic_data", updateBasicData);
 router.post("/patients/update_patient_scan_times", updateScanTimesofPatient);
 router.post("/patients/files/add_file", addPatientScanFile);
@@ -105,11 +117,17 @@ router.post(
   "/patients/update_patient_complications",
   updatePatientComplications
 );
+router.get('/get_times/:patientId', getPatientTimes);
+router.get('/get_bulk_timings/:patientType/:timePeriod', calculateBulkPatientTimings);
 router.post("/patients/update_patient_nihss", updateNIHSSofPatient);
 router.post("/patients/update_patient_mrs", updateMRSofPatient);
 router.post("/patient_analysis/post_comment", postComment);
+router.post("/patient_analysis/post_conclusion", postConclusion);
 router.get("/patient_analysis/get_comments/:PatientId", getComments);
 router.get("/patients/patient/:PatientId", getSinglePatient);
+router.get("/patient_analysis/get_transition_statueses/:PatientId", getTransitionStatuses);
+router.get("/patient_analysis/get_conclusion_types/:PatientId", getConclusionTypes);
+router.get("/patient_analysis/get_online_users/:PatientId", getOnlineUsers);
 router.get("/get_hubs", getHubs);
 router.post("/contact_us", contactUs);
 router.get("/get_centers", getCenters);
